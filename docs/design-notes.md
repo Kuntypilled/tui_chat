@@ -60,7 +60,12 @@ Each of these was read in the source or observed by running the program.
 12. After a failed pairing the helper stays in an error state, with a message and a
     hint, until pairing is tried again.
 13. Pairing from the browser tries every Chromium-based browser profile on the
-    machine, not one the user picks.
+    machine, not one the user picks. It knows only Chrome, Chromium and Brave.
+14. ncurses holds up all input for about a second after a mouse event that was not
+    requested in the mouse mask, so every button event is requested and only the
+    left press and the wheel are acted on.
+15. A reverse-video background cannot be switched off for part of a window, so the
+    top bar applies its attribute to the text and not to the background.
 
 ## Planned work, in order
 
@@ -68,14 +73,16 @@ Each of these was read in the source or observed by running the program.
    sends text, marks read, recovers when the helper restarts, and has a pairing
    wizard. Tested against a fake helper and against the real helper up to the point
    of pairing. Not yet tried with a real paired account.
-2. Service selector in the top bar, keyboard cycling, then mouse.
-3. Launcher entry, then notifications, then photos.
+2. Done: service selector in the top bar with keyboard cycling and mouse support,
+   covered by the smoke test with the dummy protocol as the second service.
+3. WhatsApp through nchat's own support, then the launcher entry, notifications
+   and photos.
 
 ## Further choices confirmed
 
-1. Services in the selector: Google Messages, plus WhatsApp and/or Telegram through
-   nchat's own support. Which of the two is still to be confirmed. These run inside
-   nchat itself, so they only receive and notify while tui_chat is open.
+1. Services in the selector: Google Messages, plus WhatsApp through nchat's own
+   support. WhatsApp runs inside nchat itself, so it only receives and notifies while
+   tui_chat is open.
 2. Notification title for a sender with no saved name: the number.
 3. Notification title in a group chat: the group name.
 4. A message arriving in the chat that is open on screen does not notify. Messages
@@ -84,6 +91,5 @@ Each of these was read in the source or observed by running the program.
 
 ## Open questions
 
-1. Whether WhatsApp, Telegram or both go in the selector.
-2. Where the service selector's cycling keys should sit. To be chosen by testing
-   which keys the terminal actually delivers, and rebindable.
+1. How to pair the Google account, given the helper does not read the user's main
+   browser. Chromium has been installed for the purpose.

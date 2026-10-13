@@ -41,6 +41,17 @@ UiListView::~UiListView()
   }
 }
 
+int UiListView::GetChatIndexAt(int p_Y) const
+{
+  if (!m_Enabled || (m_PaddedWin == nullptr)) return -1;
+
+  const int row = p_Y - (m_Y + 1);
+  if ((row < 0) || (row >= m_PaddedH)) return -1;
+
+  const int index = m_DrawnOffset + row;
+  return (index < m_DrawnCount) ? index : -1;
+}
+
 void UiListView::Draw()
 {
   if (!m_Enabled || !m_Dirty) return;
@@ -72,12 +83,17 @@ void UiListView::Draw()
   wbkgd(m_PaddedWin, attribute | colorPair | ' ');
   wattron(m_PaddedWin, attribute | colorPair);
 
+  m_DrawnOffset = 0;
+  m_DrawnCount = 0;
+
   if (!names.empty())
   {
     int height = m_PaddedH;
     int count = names.size();
     int offset = std::min(std::max(0, index - ((height - 1) / 2)), std::max(0, count - height));
     int last = std::min((height + offset), count);
+    m_DrawnOffset = offset;
+    m_DrawnCount = count;
     for (int i = offset; i < last; ++i)
     {
       if (i == index)

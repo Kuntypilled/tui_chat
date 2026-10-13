@@ -57,6 +57,17 @@ void Ui::Init()
   cbreak();
   UiConfig::GetBool("linefeed_on_enter") ? nl() : nonl();
   keypad(stdscr, TRUE);
+  if (UiConfig::GetBool("mouse_enabled"))
+  {
+    // Clicks and the wheel, reported as KEY_MOUSE. Holding Shift while selecting
+    // text still works in most terminals, since they then handle the mouse.
+    // All button events are requested even though only a left press and the wheel
+    // are used: an event that is not requested is not recognised as a complete
+    // sequence, and ncurses then holds up all input for about a second.
+    mouseinterval(0);
+    mousemask(ALL_MOUSE_EVENTS, nullptr);
+  }
+
   curs_set(0);
   timeout(0);
   EmojiList::Init();

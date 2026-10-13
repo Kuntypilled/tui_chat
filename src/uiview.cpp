@@ -175,6 +175,39 @@ void UiView::SetListDirty(bool p_Dirty)
   m_UiListView->SetDirty(p_Dirty);
 }
 
+void UiView::SetTopDirty(bool p_Dirty)
+{
+  m_UiTopView->SetDirty(p_Dirty);
+}
+
+UiMouseHit UiView::HitTest(int p_X, int p_Y)
+{
+  UiMouseHit hit;
+  if (m_UiTopView->IsEnabled() && (p_Y == m_UiTopView->Y()))
+  {
+    hit.area = UiMouseArea::Top;
+    hit.profileId = m_UiTopView->GetTabAt(p_X);
+    return hit;
+  }
+
+  const int listX = m_UiListView->X();
+  if (m_UiListView->IsEnabled() && (p_X >= listX) && (p_X < (listX + m_UiListView->W())) &&
+      (p_Y >= m_UiListView->Y()) && (p_Y < (m_UiListView->Y() + m_UiListView->H())))
+  {
+    hit.area = UiMouseArea::List;
+    hit.chatIndex = m_UiListView->GetChatIndexAt(p_Y);
+    return hit;
+  }
+
+  if ((p_X >= m_UiHistoryView->X()) && (p_Y >= m_UiHistoryView->Y()) &&
+      (p_Y < (m_UiHistoryView->Y() + m_UiHistoryView->H())))
+  {
+    hit.area = UiMouseArea::History;
+  }
+
+  return hit;
+}
+
 void UiView::SetStatusDirty(bool p_Dirty)
 {
   m_UiStatusView->SetDirty(p_Dirty);

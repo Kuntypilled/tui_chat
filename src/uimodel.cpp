@@ -545,6 +545,281 @@ void UiModel::Impl::SetTyping(const std::string& p_ProfileId, const std::string&
   }
 }
 
+// ---------------------------------------------------------------------------
+// Service selector. The chat list shows the chats of one service (chat profile)
+// at a time. m_ChatVec still holds every chat of every service, so the rest of
+// the model is unchanged, and only the places that move between chats or draw
+// the list look at the selection.
+// ---------------------------------------------------------------------------
+
+bool UiModel::Impl::IsServiceFilterActive()
+{
+  return m_Protocols.size() > 1;
+}
+
+std::vector<std::string> UiModel::Impl::GetServiceProfileIds()
+{
+  std::vector<std::string> profileIds;
+  for (const auto& protocol : m_Protocols)
+  {
+    profileIds.push_back(protocol.first);
+  }
+
+  // a stable order, so the tabs do not move around between runs
+  std::sort(profileIds.begin(), profileIds.end(), [this](const std::string& lhs, const std::string& rhs)
+  {
+    const std::string lhsName = GetProfileDisplayName(lhs);
+    const std::string rhsName = GetProfileDisplayName(rhs);
+    return (lhsName != rhsName) ? (lhsName < rhsName) : (lhs < rhs);
+  });
+
+  return profileIds;
+}
+
+void UiModel::Impl::EnsureSelectedService()
+{
+  if (!m_SelectedProfileId.empty() && m_Protocols.count(m_SelectedProfileId)) return;
+
+  const std::vector<std::string> profileIds = GetServiceProfileIds();
+  m_SelectedProfileId = profileIds.empty() ? std::string() : profileIds.front();
+}
+
+bool UiModel::Impl::IsChatInSelectedService(const std::pair<std::string, std::string>& p_Chat)
+{
+  if (!IsServiceFilterActive()) return true;
+
+  EnsureSelectedService();
+  return p_Chat.first == m_SelectedProfileId;
+}
+
+// The index in m_ChatVec of the next chat of the selected service, stepping
+// from p_FromIndex by p_Step and wrapping around. -1 when there is none.
+int UiModel::Impl::StepVisibleChat(int p_FromIndex, int p_Step)
+{
+  const int count = (int)m_ChatVec.size();
+  int index = p_FromIndex;
+  for (int i = 0; i < count; ++i)
+  {
+    index += p_Step;
+    if (index >= count) index = 0;
+    if (index < 0) index = count - 1;
+
+    if (IsChatInSelectedService(m_ChatVec.at(index))) return index;
+  }
+
+  return -1;
+}
+
+// The chat to show once the one at p_Index has gone: the nearest one of the
+// selected service, or any chat when that service has none left.
+const std::pair<std::string, std::string>& UiModel::Impl::GetChatNearIndex(int p_Index)
+{
+  if (m_ChatVec.empty()) return s_ChatNone;
+
+  const int last = (int)m_ChatVec.size() - 1;
+  const int bounded = NumUtil::Bound(0, p_Index, last);
+  for (int i = bounded; i <= last; ++i)
+  {
+    if (IsChatInSelectedService(m_ChatVec.at(i))) return m_ChatVec.at(i);
+  }
+
+  for (int i = bounded - 1; i >= 0; --i)
+  {
+    if (IsChatInSelectedService(m_ChatVec.at(i))) return m_ChatVec.at(i);
+  }
+
+  return m_ChatVec.at(bounded);
+}
+
+std::vector<std::pair<std::string, std::string>>& UiModel::Impl::GetVisibleChatVec()
+{
+  m_VisibleChatVec.clear();
+  for (const auto& chat : m_ChatVec)
+  {
+    if (IsChatInSelectedService(chat))
+    {
+      m_VisibleChatVec.push_back(chat);
+    }
+  }
+
+  return m_VisibleChatVec;
+}
+
+int UiModel::Impl::GetVisibleChatIndex()
+{
+  int index = 0;
+  for (const auto& chat : m_ChatVec)
+  {
+    if (!IsChatInSelectedService(chat)) continue;
+
+    if (chat == m_CurrentChat) return index;
+
+    ++index;
+  }
+
+  return -1;
+}
+
+std::vector<UiServiceTab> UiModel::Impl::GetServiceTabs()
+{
+  EnsureSelectedService();
+
+  std::map<std::string, int> unreadCounts;
+  for (const auto& chat : m_ChatVec)
+  {
+    if (GetChatIsUnread(chat.first, chat.second))
+    {
+      ++unreadCounts[chat.first];
+    }
+  }
+
+  std::vector<UiServiceTab> tabs;
+  for (const std::string& profileId : GetServiceProfileIds())
+  {
+    UiServiceTab tab;
+    tab.profileId = profileId;
+    tab.name = GetProfileDisplayName(profileId);
+    tab.unread = unreadCounts[profileId];
+    tab.isSelected = (profileId == m_SelectedProfileId);
+    tabs.push_back(tab);
+  }
+
+  return tabs;
+}
+
+void UiModel::Impl::SelectService(const std::string& p_ProfileId)
+{
+  if (GetEditMessageActive()) return;
+
+  if (!m_Protocols.count(p_ProfileId)) return;
+
+  m_SelectedProfileId = p_ProfileId;
+
+  // go back to the chat last used in that service, else its top chat
+  int targetIndex = -1;
+  auto lastIt = m_ServiceLastChat.find(p_ProfileId);
+  if (lastIt != m_ServiceLastChat.end())
+  {
+    for (size_t i = 0; i < m_ChatVec.size(); ++i)
+    {
+      if (m_ChatVec.at(i) == lastIt->second)
+      {
+        targetIndex = (int)i;
+        break;
+      }
+    }
+  }
+
+  if (targetIndex < 0)
+  {
+    targetIndex = StepVisibleChat(-1, 1);
+  }
+
+  if (targetIndex >= 0)
+  {
+    m_CurrentChatIndex = targetIndex;
+    m_CurrentChat = m_ChatVec.at(m_CurrentChatIndex);
+  }
+  else
+  {
+    // a service with no chats yet: show an empty list rather than another service's chat
+    m_CurrentChatIndex = -1;
+    m_CurrentChat = s_ChatNone;
+  }
+
+  m_View->SetTopDirty(true);
+  OnCurrentChatChanged();
+  SetSelectMessageActive(false);
+}
+
+void UiModel::Impl::OnKeyNextService()
+{
+  AnyUserKeyInput();
+
+  const std::vector<std::string> profileIds = GetServiceProfileIds();
+  if (profileIds.size() < 2) return;
+
+  EnsureSelectedService();
+  auto it = std::find(profileIds.begin(), profileIds.end(), m_SelectedProfileId);
+  const size_t pos = (it == profileIds.end()) ? 0 : (size_t)(it - profileIds.begin());
+  SelectService(profileIds.at((pos + 1) % profileIds.size()));
+}
+
+void UiModel::Impl::OnKeyPrevService()
+{
+  AnyUserKeyInput();
+
+  const std::vector<std::string> profileIds = GetServiceProfileIds();
+  if (profileIds.size() < 2) return;
+
+  EnsureSelectedService();
+  auto it = std::find(profileIds.begin(), profileIds.end(), m_SelectedProfileId);
+  const size_t pos = (it == profileIds.end()) ? 0 : (size_t)(it - profileIds.begin());
+  SelectService(profileIds.at((pos + profileIds.size() - 1) % profileIds.size()));
+}
+
+void UiModel::Impl::SelectVisibleChat(int p_VisibleIndex)
+{
+  if (GetEditMessageActive()) return;
+
+  const std::vector<std::pair<std::string, std::string>>& visibleChats = GetVisibleChatVec();
+  if ((p_VisibleIndex < 0) || (p_VisibleIndex >= (int)visibleChats.size())) return;
+
+  const std::pair<std::string, std::string> chat = visibleChats.at(p_VisibleIndex);
+  for (size_t i = 0; i < m_ChatVec.size(); ++i)
+  {
+    if (m_ChatVec.at(i) == chat)
+    {
+      m_CurrentChatIndex = (int)i;
+      m_CurrentChat = chat;
+      OnCurrentChatChanged();
+      SetSelectMessageActive(false);
+      return;
+    }
+  }
+}
+
+void UiModel::Impl::OnMouse(int p_X, int p_Y, uint32_t p_State)
+{
+  AnyUserKeyInput();
+
+  // dialogs and message editing own the keyboard, leave them alone
+  if (GetEditMessageActive() || GetListDialogActive() || GetFileListDialogActive() || GetMessageDialogActive()) return;
+
+  const bool isPress = (p_State & BUTTON1_PRESSED) != 0;
+  const bool isWheelUp = (p_State & BUTTON4_PRESSED) != 0;
+#ifdef BUTTON5_PRESSED
+  const bool isWheelDown = (p_State & BUTTON5_PRESSED) != 0;
+#else
+  const bool isWheelDown = false;
+#endif
+
+  const UiMouseHit hit = m_View->HitTest(p_X, p_Y);
+  switch (hit.area)
+  {
+    case UiMouseArea::Top:
+      if (isPress && !hit.profileId.empty()) SelectService(hit.profileId);
+      else if (isWheelUp) OnKeyPrevService();
+      else if (isWheelDown) OnKeyNextService();
+      break;
+
+    case UiMouseArea::List:
+      if (isPress) SelectVisibleChat(hit.chatIndex);
+      else if (isWheelUp) OnKeyPrevChat();
+      else if (isWheelDown) OnKeyNextChat();
+      break;
+
+    case UiMouseArea::History:
+      if (isWheelUp) OnKeyPrevPage();
+      else if (isWheelDown) OnKeyNextPage();
+      break;
+
+    case UiMouseArea::None:
+    default:
+      break;
+  }
+}
+
 void UiModel::Impl::OnKeyNextChat()
 {
   AnyUserKeyInput();
@@ -553,12 +828,10 @@ void UiModel::Impl::OnKeyNextChat()
 
   if (m_ChatVec.empty()) return;
 
-  ++m_CurrentChatIndex;
-  if (m_CurrentChatIndex >= (int)m_ChatVec.size())
-  {
-    m_CurrentChatIndex = 0;
-  }
+  const int nextIndex = StepVisibleChat(m_CurrentChatIndex, 1);
+  if (nextIndex < 0) return;
 
+  m_CurrentChatIndex = nextIndex;
   m_CurrentChat = m_ChatVec.at(m_CurrentChatIndex);
   OnCurrentChatChanged();
   SetSelectMessageActive(false);
@@ -572,12 +845,10 @@ void UiModel::Impl::OnKeyPrevChat()
 
   if (m_ChatVec.empty()) return;
 
-  --m_CurrentChatIndex;
-  if (m_CurrentChatIndex < 0)
-  {
-    m_CurrentChatIndex = m_ChatVec.size() - 1;
-  }
+  const int prevIndex = StepVisibleChat(m_CurrentChatIndex, -1);
+  if (prevIndex < 0) return;
 
+  m_CurrentChatIndex = prevIndex;
   m_CurrentChat = m_ChatVec.at(m_CurrentChatIndex);
   OnCurrentChatChanged();
   SetSelectMessageActive(false);
@@ -594,16 +865,23 @@ void UiModel::Impl::OnKeyUnreadChat()
   std::vector<int> unreadVec;
   bool unreadIsSelected = false;
 
-  for (size_t i = 0; i < m_ChatVec.size(); ++i)
+  // prefer the selected service, and only look further when it has nothing unread
+  for (int pass = 0; (pass < 2) && unreadVec.empty(); ++pass)
   {
-    const std::pair<std::string, std::string>& chat = m_ChatVec.at(i);
-    const bool isUnread = GetChatIsUnread(chat.first, chat.second);
-    if (isUnread)
+    const bool selectedOnly = (pass == 0);
+    for (size_t i = 0; i < m_ChatVec.size(); ++i)
     {
-      unreadVec.push_back(i);
-      if (m_CurrentChatIndex == (int)i)
+      const std::pair<std::string, std::string>& chat = m_ChatVec.at(i);
+      if (selectedOnly && !IsChatInSelectedService(chat)) continue;
+
+      const bool isUnread = GetChatIsUnread(chat.first, chat.second);
+      if (isUnread)
       {
-        unreadIsSelected = true;
+        unreadVec.push_back(i);
+        if (m_CurrentChatIndex == (int)i)
+        {
+          unreadIsSelected = true;
+        }
       }
     }
   }
@@ -2118,7 +2396,7 @@ void UiModel::Impl::MessageHandler(std::shared_ptr<ServiceMessage> p_ServiceMess
 
           if ((m_CurrentChat.first == profileId) && (m_CurrentChat.second == chatId))
           {
-            m_CurrentChat = m_ChatVec.at(NumUtil::Bound(0, m_CurrentChatIndex, ((int)m_ChatVec.size() - 1)));
+            m_CurrentChat = GetChatNearIndex(m_CurrentChatIndex);
             SortChats();
             OnCurrentChatChanged();
             SetSelectMessageActive(false);
@@ -2271,7 +2549,7 @@ void UiModel::Impl::MessageHandler(std::shared_ptr<ServiceMessage> p_ServiceMess
           {
             if (!m_ChatVec.empty())
             {
-              m_CurrentChat = m_ChatVec.at(NumUtil::Bound(0, m_CurrentChatIndex, ((int)m_ChatVec.size() - 1)));
+              m_CurrentChat = GetChatNearIndex(m_CurrentChatIndex);
             }
             else
             {
@@ -2499,8 +2777,12 @@ void UiModel::Impl::SortChats()
   {
     if (m_CurrentChatIndex == -1)
     {
-      m_CurrentChat = m_ChatVec.at(0);
-      OnCurrentChatChanged();
+      const int firstIndex = StepVisibleChat(-1, 1);
+      if (firstIndex >= 0)
+      {
+        m_CurrentChat = m_ChatVec.at(firstIndex);
+        OnCurrentChatChanged();
+      }
     }
     else
     {
@@ -2839,6 +3121,13 @@ std::string UiModel::Impl::GetChatStatus(const std::string& p_ProfileId, const s
 void UiModel::Impl::OnCurrentChatChanged()
 {
   LOG_TRACE("current chat %s %s", m_CurrentChat.first.c_str(), m_CurrentChat.second.c_str());
+  if (m_CurrentChat != s_ChatNone)
+  {
+    // whichever way the chat was reached, the selector shows its service
+    m_SelectedProfileId = m_CurrentChat.first;
+    m_ServiceLastChat[m_CurrentChat.first] = m_CurrentChat;
+  }
+
   SetHistoryInteraction(false);
   UpdateList();
   UpdateStatus();
@@ -3065,6 +3354,7 @@ void UiModel::Impl::ReinitView()
 void UiModel::Impl::UpdateList()
 {
   m_View->SetListDirty(true);
+  m_View->SetTopDirty(true); // service tabs show unread counts
   m_View->SetEntryDirty(true);
 }
 
@@ -3262,7 +3552,10 @@ bool UiModel::Impl::SetCurrentChatIndexIfNotSet()
 {
   if ((m_CurrentChatIndex >= 0) || (m_ChatVec.empty())) return false;
 
-  m_CurrentChatIndex = 0;
+  const int firstIndex = StepVisibleChat(-1, 1);
+  if (firstIndex < 0) return false;
+
+  m_CurrentChatIndex = firstIndex;
   m_CurrentChat = m_ChatVec.at(m_CurrentChatIndex);
 
   UpdateHistory();
@@ -3854,12 +4147,8 @@ const std::pair<std::string, std::string>& UiModel::Impl::GetNextChat()
 {
   if (m_ChatVec.empty()) return s_ChatNone;
 
-  const int chatIndex = std::max(m_CurrentChatIndex, 0);
-  int nextChatIndex = chatIndex + 1;
-  if (nextChatIndex >= (int)m_ChatVec.size())
-  {
-    nextChatIndex = 0;
-  }
+  const int nextChatIndex = StepVisibleChat(std::max(m_CurrentChatIndex, 0), 1);
+  if (nextChatIndex < 0) return s_ChatNone;
 
   const std::pair<std::string, std::string>& nextChat = m_ChatVec.at(nextChatIndex);
   return nextChat;
@@ -4574,6 +4863,9 @@ void UiModel::KeyHandler(wint_t p_Key)
   static wint_t keyNextChat = UiKeyConfig::GetKey("next_chat");
   static wint_t keyPrevChat = UiKeyConfig::GetKey("prev_chat");
   static wint_t keyUnreadChat = UiKeyConfig::GetKey("unread_chat");
+  static wint_t keyNextService = UiKeyConfig::GetKey("next_service");
+  static wint_t keyPrevService = UiKeyConfig::GetKey("prev_service");
+  static wint_t keyMouse = UiKeyConfig::GetKeyCode("KEY_MOUSE");
 
   static wint_t keyQuit = UiKeyConfig::GetKey("quit");
   static wint_t keySelectEmoji = UiKeyConfig::GetKey("select_emoji");
@@ -4674,6 +4966,30 @@ void UiModel::KeyHandler(wint_t p_Key)
   {
     std::unique_lock<owned_mutex> lock(m_ModelMutex);
     GetImpl().OnKeyUnreadChat();
+  }
+  else if (p_Key == keyNextService)
+  {
+    std::unique_lock<owned_mutex> lock(m_ModelMutex);
+    GetImpl().OnKeyNextService();
+  }
+  else if (p_Key == keyPrevService)
+  {
+    std::unique_lock<owned_mutex> lock(m_ModelMutex);
+    GetImpl().OnKeyPrevService();
+  }
+  else if (p_Key == keyMouse)
+  {
+    MEVENT event;
+    if (getmouse(&event) == OK)
+    {
+      LOG_TRACE("mouse x %d y %d state 0x%x", event.x, event.y, (unsigned)event.bstate);
+      std::unique_lock<owned_mutex> lock(m_ModelMutex);
+      GetImpl().OnMouse(event.x, event.y, static_cast<uint32_t>(event.bstate));
+    }
+    else
+    {
+      LOG_TRACE("mouse event not available");
+    }
   }
   else if (p_Key == keyPrevPage)
   {
@@ -5033,7 +5349,8 @@ std::string UiModel::GetChatStatusLocked(const std::string& p_ProfileId, const s
 std::vector<std::pair<std::string, std::string>>& UiModel::GetChatVecLocked()
 {
   nc_assert(m_ModelMutex.owns_lock());
-  return GetImpl().GetChatVec();
+  // only the chats of the selected service, in the order they are listed
+  return GetImpl().GetVisibleChatVec();
 }
 
 std::string UiModel::GetContactListNameLocked(const std::string& p_ProfileId, const std::string& p_ChatId,
@@ -5058,7 +5375,14 @@ std::string UiModel::GetContactPhoneLocked(const std::string& p_ProfileId, const
 int UiModel::GetCurrentChatIndexLocked()
 {
   nc_assert(m_ModelMutex.owns_lock());
-  return GetImpl().GetCurrentChatIndex();
+  // the position within the visible list, which is what the list view draws
+  return GetImpl().GetVisibleChatIndex();
+}
+
+std::vector<UiServiceTab> UiModel::GetServiceTabsLocked()
+{
+  nc_assert(m_ModelMutex.owns_lock());
+  return GetImpl().GetServiceTabs();
 }
 
 std::pair<std::string, std::string>& UiModel::GetCurrentChatLocked()

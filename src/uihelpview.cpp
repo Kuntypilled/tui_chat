@@ -97,6 +97,8 @@ void UiHelpView::Draw()
     AppendHelpItem("select_mention", "Mention", helpItems);
     AppendHelpItem("spell", "ExtSpell", helpItems);
     AppendHelpItem("auto_compose", "AutoComp", helpItems);
+    AppendHelpItem("next_service", "NextSvc", helpItems);
+    AppendHelpItem("prev_service", "PrevSvc", helpItems);
     AppendHelpItem("decrease_list_width", "DecListW", helpItems);
     AppendHelpItem("increase_list_width", "IncListW", helpItems);
 
@@ -282,6 +284,16 @@ std::string UiHelpView::GetKeyDisplay(const std::string& p_Func)
       static const std::string helpPrefixMeta = UiConfig::GetStr("help_prefix_meta");
       return helpPrefixMeta + keyStr.substr(1);
     }
+  }
+  else if (keyName == "\\33\\133\\66\\73\\65\\176") // ctrl-pgdn
+  {
+    static const std::string helpPrefixCtrl = UiConfig::GetStr("help_prefix_ctrl");
+    return helpPrefixCtrl + "PgDn";
+  }
+  else if (keyName == "\\33\\133\\65\\73\\65\\176") // ctrl-pgup
+  {
+    static const std::string helpPrefixCtrl = UiConfig::GetStr("help_prefix_ctrl");
+    return helpPrefixCtrl + "PgUp";
   }
   else if (keyName == "KEY_RETURN")
   {

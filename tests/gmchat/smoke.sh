@@ -55,6 +55,23 @@ out="$(python3 -I "$here/drive.py" 110 20 \
 echo "$out" | grep -E '^(PASS|FAIL)'
 echo "$out" | grep -q '^FAIL' && fail=1
 
+echo "== service selector with a second service (keyboard and mouse)"
+# the dummy protocol is a second service that needs no account
+out="$(python3 -I "$here/drive.py" 110 30 \
+  "wait:1;expect:Select protocol;send:0\r;expect:phone number;send:+15555550100\r;wait:2;send:\x11;wait:0.5" \
+  -- "$nchat" -s -d "$work/conf")"
+if echo "$out" | grep -q '^FAIL'; then
+  echo "SKIP no dummy protocol in this build"
+else
+  # SGR mouse events: ESC [ < button ; column ; row, with 0 left press, 64 and 65 the wheel
+  click() { printf 'send:\\x1b[<0\\x3b%d\\x3b%dM;send:\\x1b[<0\\x3b%d\\x3b%dm' "$1" "$2" "$1" "$2"; }
+  out="$(python3 -I "$here/drive.py" 120 24 \
+    "wait:3;expect:Dummy;expect:Google Messages;expect:@ Dummy;send:\x1b[6\x3b5~;expect:@ Google Messages;send:\x1b[5\x3b5~;expect:@ Dummy;$(click 22 1);expect:@ Google Messages;$(click 10 1);expect:@ Dummy;send:\x1b[6\x3b5~;expect:@ Google Messages;send:\t;expect:Book club @ Google Messages" \
+    -- "$nchat" -d "$work/conf")"
+  echo "$out" | grep -E '^(PASS|FAIL)'
+  echo "$out" | grep -q '^FAIL' && fail=1
+fi
+
 echo "== no message text written by nchat itself"
 if grep -rl "hello from smoke\|incoming smoke message" "$work/conf" >/dev/null 2>&1; then
   echo "FAIL message text found under the config directory"

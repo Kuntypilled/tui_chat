@@ -45,6 +45,7 @@ public:
   int H();
   int X();
   int Y();
+  bool IsEnabled();
   void SetDirty(bool p_Dirty);
 
 protected:

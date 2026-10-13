@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 class UiEntryView;
 class UiHelpView;
@@ -18,6 +19,21 @@ class UiModel;
 class UiScreen;
 class UiStatusView;
 class UiTopView;
+
+enum class UiMouseArea
+{
+  None,
+  Top,
+  List,
+  History,
+};
+
+struct UiMouseHit
+{
+  UiMouseArea area = UiMouseArea::None;
+  std::string profileId; // Top: the service tab under the pointer, if any
+  int chatIndex = -1; // List: index into the drawn chat list
+};
 
 class UiView
 {
@@ -35,6 +51,7 @@ public:
   void SetListEnabled(bool p_Enabled);
   bool GetListEnabled();
   void SetListDirty(bool p_Dirty);
+  void SetTopDirty(bool p_Dirty);
   void SetStatusDirty(bool p_Dirty);
   void SetHistoryDirty(bool p_Dirty);
   void SetHelpDirty(bool p_Dirty);
@@ -46,6 +63,7 @@ public:
   int GetScreenHeight();
   void DecreaseListWidth();
   void IncreaseListWidth();
+  UiMouseHit HitTest(int p_X, int p_Y);
 
 protected:
   void Init();

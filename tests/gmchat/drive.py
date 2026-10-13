@@ -117,7 +117,7 @@ class Screen:
             i += 1
 
     def _csi(self, params, final):
-        private = params[:1] in "?<>="
+        private = params[:1] in ("?", "<", ">", "=")  # a bare "" must not count
         if private:
             return
         nums = [int(p) if p.isdigit() else 0 for p in params.split(";")] if params else []

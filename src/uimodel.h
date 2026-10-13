@@ -20,6 +20,15 @@
 
 class UiView;
 
+// One service (chat profile) in the selector across the top.
+struct UiServiceTab
+{
+  std::string profileId;
+  std::string name;
+  int unread = 0; // chats with unread messages
+  bool isSelected = false;
+};
+
 class UiModel
 {
 private:
@@ -49,6 +58,20 @@ private:
     void OnKeyNextChat();
     void OnKeyPrevChat();
     void OnKeyUnreadChat();
+    void OnKeyNextService();
+    void OnKeyPrevService();
+    void SelectService(const std::string& p_ProfileId);
+    void SelectVisibleChat(int p_VisibleIndex);
+    void OnMouse(int p_X, int p_Y, uint32_t p_State);
+    std::vector<UiServiceTab> GetServiceTabs();
+    std::vector<std::pair<std::string, std::string>>& GetVisibleChatVec();
+    int GetVisibleChatIndex();
+    bool IsServiceFilterActive();
+    void EnsureSelectedService();
+    std::vector<std::string> GetServiceProfileIds();
+    bool IsChatInSelectedService(const std::pair<std::string, std::string>& p_Chat);
+    int StepVisibleChat(int p_FromIndex, int p_Step);
+    const std::pair<std::string, std::string>& GetChatNearIndex(int p_Index);
     void OnKeyPrevPage();
     void OnKeyNextPage();
     bool OnKeyHomeFetchCache();
@@ -254,6 +277,11 @@ private:
     int m_CurrentChatIndex = -1;
     static const std::pair<std::string, std::string> s_ChatNone;
 
+    // service selector: the chat list shows the chats of one service at a time
+    std::string m_SelectedProfileId;
+    std::map<std::string, std::pair<std::string, std::string>> m_ServiceLastChat;
+    std::vector<std::pair<std::string, std::string>> m_VisibleChatVec;
+
     std::string m_EditMessageId;
     std::string m_ProtocolUiControl;
 
@@ -374,6 +402,7 @@ public:
   void FetchCachedMessageLocked(const std::string& p_ProfileId, const std::string& p_ChatId,
                                 const std::string& p_MsgId);
   bool IsMultipleProfilesLocked();
+  std::vector<UiServiceTab> GetServiceTabsLocked();
   void MarkReadLocked(const std::string& p_ProfileId, const std::string& p_ChatId, const std::string& p_MsgId,
                       bool p_WasUnread);
   void OnStatusUpdateLocked(uint32_t p_Status);

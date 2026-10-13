@@ -70,6 +70,33 @@ Risks, stated plainly: the helper uses unofficial client libraries and may stop
 working when Google changes things. What Google does about accounts that use them
 has not been measured. Try a secondary account first.
 
+## Services across the top, and the mouse
+
+The top bar has one tab per chat service, in alphabetical order. The tab for the
+service you are in is shown as a lit block. A number after a service name is how
+many of its chats have unread messages. The chat list below shows only the chats of
+the selected service.
+
+| to do this | keyboard | mouse |
+|---|---|---|
+| next or previous service | Ctrl-PageDown, Ctrl-PageUp | click a tab, or the wheel over the top bar |
+| next or previous chat | Tab, Shift-Tab | click a chat, or the wheel over the list |
+| scroll history | PageUp, PageDown | the wheel over the messages |
+| next unread chat | Ctrl-F | none |
+
+Things that behave in a way worth knowing:
+
+- Switching services returns you to the chat you last had open there.
+- Ctrl-F looks for an unread chat in the current service first, and only then in the
+  others, switching service when it finds one there.
+- Opening a chat from the "go to chat" dialog switches to that chat's service.
+- A service with no chats yet shows an empty list.
+
+The mouse is on by default. While it is on, selecting text to copy needs Shift held
+down in most terminals. Set `mouse_enabled=0` in `ui.conf` to turn it off. The two
+service keys can be rebound in `key.conf` as `next_service` and `prev_service`, and
+the look of the selected tab is `top_attr_selected` in `color.conf`.
+
 ## Settings
 
 Each profile has `gmchat.conf` in its folder:

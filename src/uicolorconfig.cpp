@@ -35,6 +35,7 @@ void UiColorConfig::Init()
   const std::map<std::string, std::string> defaultConfig =
   {
     { "top_attr", "reverse" },
+    { "top_attr_selected", "normal" }, // the selected service tab
     { "top_color_bg", "" },
     { "top_color_fg", "" },
     { "help_attr", "reverse" },

@@ -77,6 +77,7 @@ void UiConfig::Init()
     { "terminal_bell_inactive", "1" },
     { "terminal_title", "" },
     { "top_enabled", "1" },
+    { "mouse_enabled", "1" },
     { "top_show_version", "0" },
     { "transfer_send_caption", "1" },
     { "typing_status_share", "1" },

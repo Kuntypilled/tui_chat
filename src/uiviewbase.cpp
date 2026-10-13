@@ -44,6 +44,11 @@ int UiViewBase::X()
   return m_Enabled ? m_X : 0;
 }
 
+bool UiViewBase::IsEnabled()
+{
+  return m_Enabled;
+}
+
 int UiViewBase::Y()
 {
   return m_Enabled ? m_Y : 0;
