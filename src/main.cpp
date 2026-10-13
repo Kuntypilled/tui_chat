@@ -35,6 +35,10 @@
 #include "duchat.h"
 #endif
 
+#ifdef HAS_GMESSAGES
+#include "gmchat.h"
+#endif
+
 #ifdef HAS_TELEGRAM
 #include "tgchat.h"
 #endif
@@ -123,6 +127,9 @@ static std::vector<std::shared_ptr<ProtocolBaseFactory>> GetProtocolFactorys()
   {
 #ifdef HAS_DUMMY
     std::shared_ptr<ProtocolBaseFactory>(new ProtocolFactory<DuChat>()),
+#endif
+#ifdef HAS_GMESSAGES
+    std::shared_ptr<ProtocolBaseFactory>(new ProtocolFactory<GmChat>()),
 #endif
 #ifdef HAS_TELEGRAM
     std::shared_ptr<ProtocolBaseFactory>(new ProtocolFactory<TgChat>()),

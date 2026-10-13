@@ -211,6 +211,10 @@ message(STATUS "ASAN: ${HAS_ASAN}")
 option(HAS_DUMMY "Dummy" ON)
 message(STATUS "Dummy: ${HAS_DUMMY}")
 
+# Optional component - Google Messages, through the omachatd helper
+option(HAS_GMESSAGES "Google Messages" ON)
+message(STATUS "Google Messages: ${HAS_GMESSAGES}")
+
 # Optional component - Telegram
 option(HAS_TELEGRAM "Telegram" ON)
 message(STATUS "Telegram: ${HAS_TELEGRAM}")
@@ -476,6 +480,9 @@ add_subdirectory(lib/ncutil)
 if(HAS_DUMMY)
   add_subdirectory(lib/duchat)
 endif()
+if(HAS_GMESSAGES)
+  add_subdirectory(lib/gmchat)
+endif()
 if(HAS_TELEGRAM)
   add_subdirectory(lib/tgchat)
 endif()
@@ -519,6 +526,16 @@ if(HAS_DUMMY)
   target_compile_definitions(nchat PRIVATE HAS_DUMMY="${HAS_DUMMY}")
   if(NOT HAS_DYNAMICLOAD)
     target_link_libraries(nchat PUBLIC duchat)
+  endif()
+endif()
+
+if(HAS_GMESSAGES)
+  target_include_directories(nchat PRIVATE "lib/gmchat/src")
+  # gmchat.h includes the bundled RapidJSON headers
+  target_include_directories(nchat SYSTEM PRIVATE "lib/ncutil/ext/cereal/include")
+  target_compile_definitions(nchat PRIVATE HAS_GMESSAGES="${HAS_GMESSAGES}")
+  if(NOT HAS_DYNAMICLOAD)
+    target_link_libraries(nchat PUBLIC gmchat)
   endif()
 endif()
 
@@ -650,6 +667,7 @@ if(HAS_SHARED_LIBS)
     COMMAND "${CMAKE_COMMAND}" -E remove "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libtdclientshared${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E remove "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libtgchat${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E remove "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libduchat${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    COMMAND "${CMAKE_COMMAND}" -E remove "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libgmchat${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E remove "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libwmchat${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E remove "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libsgchat${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E remove "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/doc/nchat/THIRD_PARTY_LICENSES"
@@ -695,6 +713,16 @@ if(CMAKE_BUILD_TYPE MATCHES "Debug")
     target_compile_definitions(devnchat PRIVATE HAS_DUMMY="${HAS_DUMMY}")
     if(NOT HAS_DYNAMICLOAD)
       target_link_libraries(devnchat PUBLIC duchat)
+    endif()
+  endif()
+
+  if(HAS_GMESSAGES)
+    target_include_directories(devnchat PRIVATE "lib/gmchat/src")
+    # gmchat.h includes the bundled RapidJSON headers
+    target_include_directories(devnchat SYSTEM PRIVATE "lib/ncutil/ext/cereal/include")
+    target_compile_definitions(devnchat PRIVATE HAS_GMESSAGES="${HAS_GMESSAGES}")
+    if(NOT HAS_DYNAMICLOAD)
+      target_link_libraries(devnchat PUBLIC gmchat)
     endif()
   endif()
 
