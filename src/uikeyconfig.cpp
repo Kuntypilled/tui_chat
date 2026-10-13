@@ -185,6 +185,13 @@ void UiKeyConfig::InitKeyCodes(bool p_MapKeys)
 
 void UiKeyConfig::Init(bool p_MapKeys)
 {
+  // Enter sends the message. Terminals send the same bytes for Enter and Shift+Enter,
+  // so the line break key is Alt+Enter (escape then carriage return), which a terminal
+  // can be set up to send for Shift+Enter, for example kitty with a one line mapping.
+  // ncurses matches the sequence before it turns a return into a linefeed, so it is
+  // the same sequence whether or not linefeed_on_enter is set.
+  const std::string keyLinebreak = "\\33\\15";
+
   const std::map<std::string, std::string> defaultConfig =
   {
     { "cancel", "KEY_CTRLC" },
@@ -193,7 +200,7 @@ void UiKeyConfig::Init(bool p_MapKeys)
     { "left", "KEY_LEFT" },
     { "right", "KEY_RIGHT" },
     { "ok", "KEY_RETURN" },
-    { "linebreak", "KEY_RETURN" },
+    { "linebreak", keyLinebreak }, // alt-enter
     { "prev_page", "KEY_PPAGE" },
     { "next_page", "KEY_NPAGE" },
     { "down", "KEY_DOWN" },
@@ -238,7 +245,7 @@ void UiKeyConfig::Init(bool p_MapKeys)
     { "next_service", "\\33\\133\\66\\73\\65\\176" }, // ctrl-pgdn
     { "prev_service", "\\33\\133\\65\\73\\65\\176" }, // ctrl-pgup
     { "unread_chat", "KEY_CTRLF" },
-    { "send_msg", "KEY_CTRLX" },
+    { "send_msg", "KEY_RETURN" },
     { "delete_msg", "KEY_CTRLD" },
     { "delete_chat", "\\33\\144" }, // alt/opt-d
     { "archive_chat", "\\33\\141" }, // alt/opt-a

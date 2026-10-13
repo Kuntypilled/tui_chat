@@ -69,6 +69,11 @@ Each of these was read in the source or observed by running the program.
 16. A helper that failed one pairing attempt stays in its error state until asked
     again. A client must forget the state it saw before a new attempt, or the old
     error looks like the new attempt's result. The wizard did exactly that at first.
+18. Terminals send the same bytes for Enter and Shift+Enter. ncurses matches a key
+    sequence before it turns a return into a linefeed, so Alt+Enter is escape plus
+    carriage return in both line modes. Turning on the kitty keyboard protocol would
+    separate the two keys, but it also re-encodes every Ctrl and Alt combination,
+    which nchat's key bindings depend on.
 17. If the pairing wizard quits before showing the emoji, the phone still gets the
     prompt but the person cannot match it, and the helper logs "user cancelled
     pairing on phone".

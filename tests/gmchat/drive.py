@@ -9,6 +9,8 @@ steps are separated by ';'
   gone:TEXT          wait up to 10 s for TEXT to leave the screen
   snap:LABEL         print the current screen
   count:TEXT         print how many screen rows contain TEXT
+  rightof:N:TEXT     pass if TEXT starts at screen column N or further right
+  leftof:N:TEXT      pass if TEXT starts at screen column N or further left
 Prints the exit state at the end. Exit status is 1 if any expect failed.
 """
 import fcntl, os, pty, re, select, signal, struct, sys, termios, time
@@ -251,6 +253,18 @@ def main():
         elif kind == "gone":
             ok = wait_for(arg, False)
             print(("PASS" if ok else "FAIL") + " gone: " + arg)
+            failures += 0 if ok else 1
+        elif kind in ("rightof", "leftof"):
+            limit_s, _, target = arg.partition(":")
+            wait_for(target, True)
+            col = -1
+            for line in screen.lines():
+                if target in line:
+                    col = line.index(target)
+                    break
+            ok = (col >= int(limit_s)) if kind == "rightof" else (0 <= col <= int(limit_s))
+            print(("PASS" if ok else "FAIL") + " %s: %s starts at column %d, wanted %s %s" % (
+                kind, target, col, "at least" if kind == "rightof" else "at most", limit_s))
             failures += 0 if ok else 1
         elif kind == "run":
             os.system(arg)

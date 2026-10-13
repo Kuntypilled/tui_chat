@@ -97,6 +97,28 @@ down in most terminals. Set `mouse_enabled=0` in `ui.conf` to turn it off. The t
 service keys can be rebound in `key.conf` as `next_service` and `prev_service`, and
 the look of the selected tab is `top_attr_selected` in `color.conf`.
 
+## Writing, and how messages are laid out
+
+- **Enter sends.** Alt+Enter adds a line break. Terminals send the very same bytes
+  for Enter and Shift+Enter, so an application cannot tell them apart. Kitty can be
+  told to send Alt+Enter for Shift+Enter, only while nchat is the program in the
+  window, with one line in `kitty.conf`:
+
+  ```
+  map --when-focus-on cmdline:nchat shift+enter send_text all \x1b\r
+  ```
+
+  Without that line Shift+Enter just sends, like Enter. Both keys can be rebound as
+  `send_msg` and `linebreak` in `key.conf`.
+- **Sides.** Messages you sent sit against the right edge of the message pane, and
+  received ones against the left. Neither is drawn wider than a share of the pane, so
+  the two sides stay visibly apart. `history_sent_align_right=0` puts everything back
+  on the left, and `history_max_width_percent` (default 75) sets the share, with 100
+  using the whole width.
+- **Chat list width.** The name column is 20 columns wide by default. Alt+, and Alt+.
+  make it narrower or wider while running, and `list_width` in `ui.conf` is where
+  the choice is kept.
+
 ## Settings
 
 Each profile has `gmchat.conf` in its folder:

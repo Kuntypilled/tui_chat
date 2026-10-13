@@ -89,6 +89,7 @@ void UiHelpView::Draw()
   static std::vector<std::wstring> mainPostHelpItems = []()
   {
     std::vector<std::wstring> helpItems;
+    AppendHelpItem("linebreak", "NewLine", helpItems);
     AppendHelpItem("ext_edit", "ExtEdit", helpItems);
     AppendHelpItem("ext_call", "ExtCall", helpItems);
     AppendHelpItem("find", "Find", helpItems);
@@ -294,6 +295,11 @@ std::string UiHelpView::GetKeyDisplay(const std::string& p_Func)
   {
     static const std::string helpPrefixCtrl = UiConfig::GetStr("help_prefix_ctrl");
     return helpPrefixCtrl + "PgUp";
+  }
+  else if ((keyName == "\\33\\12") || (keyName == "\\33\\15")) // alt-enter
+  {
+    static const std::string helpPrefixMeta = UiConfig::GetStr("help_prefix_meta");
+    return helpPrefixMeta + "\xe2\x8f\x8e";
   }
   else if (keyName == "KEY_RETURN")
   {

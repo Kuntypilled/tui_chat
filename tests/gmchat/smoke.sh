@@ -51,14 +51,24 @@ echo "$out" | grep -E '^(PASS|FAIL)'
 echo "$out" | grep -q '^FAIL' && fail=1
 
 # the newest chat (the unknown number) is shown first, so messages go there
-echo "== list, send, live message"
+echo "== list, send with Enter, line break with Alt+Enter, live message, sides"
+# Enter sends. Alt+Enter, which is what a terminal sends for Shift+Enter with a one line
+# mapping, adds a line break and must not send. Sent messages sit on the right of the
+# message pane and received ones on the left.
 out="$(python3 -I "$here/drive.py" 110 36 \
-  "wait:2;expect:Alex Rivera;expect:Book club;send:hello from smoke;send:\x18;expect:hello from smoke;wait:2.5;count:hello from smoke;run:printf 'c_num|incoming smoke message|u_x\n' >> $work/fake/inject;expect:incoming smoke message;count:incoming smoke message" \
+  "wait:2;expect:Alex Rivera;expect:Book club;send:hello from smoke;send:\r;expect:hello from smoke;wait:2.5;count:hello from smoke;rightof:60:hello from smoke;send:first of two;send:\x1b\r;send:second of two;wait:1.5;send:\r;expect:second of two;run:printf 'c_num|incoming smoke message|u_x\n' >> $work/fake/inject;expect:incoming smoke message;leftof:40:incoming smoke message;count:incoming smoke message" \
   -- "$nchat" -d "$work/conf")"
 echo "$out" | grep -E '^(PASS|FAIL|COUNT)'
 echo "$out" | grep -q '^FAIL' && fail=1
 # a sent message must be shown once, not once as provisional and once as final
 echo "$out" | grep -E '^COUNT [^1]' && fail=1
+sends="$(grep -c '^send ' "$work/fake/requests.log")"
+if [ "$sends" = "2" ]; then
+  echo "PASS exactly two messages were sent, so Alt+Enter did not send"
+else
+  echo "FAIL expected 2 sends, the helper saw $sends"
+  fail=1
+fi
 
 echo "== helper restart is survived"
 out="$(python3 -I "$here/drive.py" 110 20 \

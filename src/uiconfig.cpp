@@ -50,7 +50,9 @@ void UiConfig::Init()
     { "linefeed_on_enter", "1" },
     { "link_open_command", "" },
     { "list_enabled", "1" },
-    { "list_width", "14" },
+    { "list_width", "20" },
+    { "history_sent_align_right", "1" }, // sent messages on the right, received on the left
+    { "history_max_width_percent", "75" }, // widest a message is drawn, of the history width
     { "listdialog_show_filter", "1" },
     { "mark_read_any_chat", "0" },
     { "mark_read_on_view", "1" },

@@ -48,6 +48,37 @@ UiHistoryView::~UiHistoryView()
   }
 }
 
+// The text to draw for one line, and the column to draw it at. Left aligned lines are
+// padded to the full width, as they always were. Right aligned lines are drawn without
+// padding and end at the right edge, so a selected message is highlighted over its
+// words and not across the whole row.
+static std::wstring PlaceLine(const std::wstring& p_Line, int p_Width, bool p_AlignRight, bool p_KeepSpaces,
+                              int& p_X)
+{
+  p_X = 0;
+  if (!p_AlignRight)
+  {
+    return p_KeepSpaces ? p_Line : StrUtil::TrimPadWString(p_Line, p_Width);
+  }
+
+  std::wstring line = p_Line;
+  if (!p_KeepSpaces)
+  {
+    while (!line.empty() && (line.back() == L' '))
+    {
+      line.pop_back();
+    }
+  }
+
+  if (StrUtil::WStringWidth(line) > p_Width)
+  {
+    line = StrUtil::TrimPadWString(line, p_Width);
+  }
+
+  p_X = std::max(0, p_Width - StrUtil::WStringWidth(line));
+  return line;
+}
+
 void UiHistoryView::Draw()
 {
   if (!m_Enabled || !m_Dirty) return;
@@ -81,6 +112,13 @@ void UiHistoryView::Draw()
   std::unordered_map<std::string, ChatMessage>& messages =
     m_Model->GetMessagesLocked(currentChat.first, currentChat.second);
   int messageOffset = std::max(m_Model->GetMessageOffsetLocked(currentChat.first, currentChat.second), 0);
+
+  // Messages are drawn no wider than a share of the pane, and the ones sent from
+  // here sit against the right edge. That leaves the two sides of a conversation
+  // visibly apart, as in a phone's message app.
+  static const bool sentAlignRight = UiConfig::GetBool("history_sent_align_right");
+  static const int maxWidthPercent = std::min(100, std::max(30, UiConfig::GetNum("history_max_width_percent")));
+  const int wrapWidth = std::max(std::min(m_PaddedW, 20), (m_PaddedW * maxWidthPercent) / 100);
 
   werase(m_PaddedWin);
   wbkgd(m_PaddedWin, attributeTextNormal | colorPairTextRecv | ' ');
@@ -131,7 +169,7 @@ void UiHistoryView::Draw()
         text = StrUtil::Textize(text);
       }
 
-      wlines = StrUtil::WordWrap(StrUtil::ToWString(text), m_PaddedW, false, false, false, 2);
+      wlines = StrUtil::WordWrap(StrUtil::ToWString(text), wrapWidth, false, false, false, 2);
     }
 
     // Quoted message
@@ -161,7 +199,7 @@ void UiHistoryView::Draw()
         quotedText = "";
       }
 
-      int maxQuoteLen = m_PaddedW - 3;
+      int maxQuoteLen = wrapWidth - 3;
       std::wstring quote = quoteIndicator + StrUtil::ToWString(quotedText);
       if (StrUtil::WStringWidth(quote) > maxQuoteLen)
       {
@@ -289,7 +327,7 @@ void UiHistoryView::Draw()
             reactionsText = StrUtil::Textize(reactionsText);
           }
 
-          const int maxReactionsLen = m_PaddedW - 4;
+          const int maxReactionsLen = wrapWidth - 4;
           std::wstring reactions = StrUtil::ToWString(reactionsText);
           if (StrUtil::WStringWidth(reactions) > maxReactionsLen)
           {
@@ -337,8 +375,9 @@ void UiHistoryView::Draw()
         wattron(m_PaddedWin, attributeText | colorPairText);
       }
 
-      const std::wstring wdisp = isReaction ? *wline : StrUtil::TrimPadWString(*wline, m_PaddedW);
-      mvwaddnwstr(m_PaddedWin, y, 0, wdisp.c_str(), std::min((int)wdisp.size(), m_PaddedW));
+      int x = 0;
+      const std::wstring wdisp = PlaceLine(*wline, m_PaddedW, (sentAlignRight && msg.isOutgoing), isReaction, x);
+      mvwaddnwstr(m_PaddedWin, y, x, wdisp.c_str(), std::min((int)wdisp.size(), m_PaddedW - x));
 
       if (isAttachment)
       {
@@ -419,8 +458,9 @@ void UiHistoryView::Draw()
         L" user " + StrUtil::ToWString(msg.senderId);
     }
 
-    std::wstring wdisp = StrUtil::TrimPadWString(wheader, m_PaddedW);
-    mvwaddnwstr(m_PaddedWin, y, 0, wdisp.c_str(), std::min((int)wdisp.size(), m_PaddedW));
+    int headerX = 0;
+    std::wstring wdisp = PlaceLine(wheader, m_PaddedW, (sentAlignRight && msg.isOutgoing), false, headerX);
+    mvwaddnwstr(m_PaddedWin, y, headerX, wdisp.c_str(), std::min((int)wdisp.size(), m_PaddedW - headerX));
 
     wattroff(m_PaddedWin, attributeName | colorPairName);
 
