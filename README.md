@@ -1,3 +1,35 @@
+tui_chat
+========
+
+tui_chat is a personal fork of [nchat](https://github.com/d99kris/nchat) that adds
+Google Messages through a separate helper program. It is **not affiliated with,
+endorsed by or connected to** nchat, OmaChat or Google.
+
+What is different from upstream nchat:
+
+- A Google Messages protocol (`lib/gmchat`). It only translates between nchat and the
+  helper's local socket. Pairing and all Google protocol work stay in the helper.
+- The helper is `omachatd` from [OmaChat](https://github.com/onelegdave/omachat), which
+  is a separate program under AGPL-3.0-or-later. It is built from upstream source by
+  `scripts/build-helper.sh` and is not part of this repository.
+
+Read this before pairing an account:
+
+- The helper uses unofficial client libraries. Google may change things at any time and
+  break it.
+- What Google does about accounts that use unofficial clients has not been measured. Try a
+  secondary account before using a main one.
+- The helper keeps message content and its own login on disk under
+  `~/.local/share/omachat` and `~/.cache/omachat`. nchat's own message cache is not used
+  for Google Messages.
+
+See [docs/how-it-works.md](docs/how-it-works.md) for how the pieces fit and how to get
+started, and [docs/design-notes.md](docs/design-notes.md) for the choices behind it.
+The rest of this file is the upstream nchat README.
+
+Upstream README
+---------------
+
 nchat
 =====
 

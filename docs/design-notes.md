@@ -55,17 +55,35 @@ Each of these was read in the source or observed by running the program.
    keeps one long-lived connection.
 10. The helper only raises a desktop notification when a client asks it to, and its
     fixed text cannot carry a sender name. tui_chat sends its own.
+11. nchat silently skips any profile whose name has no underscore, so the profile id
+    is `GoogleMessages_1`.
+12. After a failed pairing the helper stays in an error state, with a message and a
+    hint, until pairing is tried again.
+13. Pairing from the browser tries every Chromium-based browser profile on the
+    machine, not one the user picks.
 
 ## Planned work, in order
 
-1. Adapter that connects, shows status and lists conversations.
-2. Messages: read history, page back, send text, mark read.
-3. Pairing wizard.
-4. Service selector in the top bar, keyboard cycling, then mouse.
-5. Launcher entry, then notifications, then photos.
+1. Done: adapter that connects, lists conversations, shows history with paging,
+   sends text, marks read, recovers when the helper restarts, and has a pairing
+   wizard. Tested against a fake helper and against the real helper up to the point
+   of pairing. Not yet tried with a real paired account.
+2. Service selector in the top bar, keyboard cycling, then mouse.
+3. Launcher entry, then notifications, then photos.
+
+## Further choices confirmed
+
+1. Services in the selector: Google Messages, plus WhatsApp and/or Telegram through
+   nchat's own support. Which of the two is still to be confirmed. These run inside
+   nchat itself, so they only receive and notify while tui_chat is open.
+2. Notification title for a sender with no saved name: the number.
+3. Notification title in a group chat: the group name.
+4. A message arriving in the chat that is open on screen does not notify. Messages
+   in any other chat do.
+5. Messages sent from another device never notify.
 
 ## Open questions
 
-1. Which services belong in the selector beyond Google Messages.
-2. Notification edge cases: sender with no saved name, group chats, messages sent
-   from another device, and whether to notify while that chat is open.
+1. Whether WhatsApp, Telegram or both go in the selector.
+2. Where the service selector's cycling keys should sit. To be chosen by testing
+   which keys the terminal actually delivers, and rebindable.
