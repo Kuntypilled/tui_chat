@@ -32,6 +32,19 @@ you  ->  nchat screen  ->  adapter  ->  helper  ->  Google Messages
    explains each step before it does it, and asks before touching anything.
 4. After that, run `nchat`.
 
+## Launcher
+
+`scripts/install-launcher.sh` adds two files, and nothing else:
+
+- `~/.local/bin/tui_chat`, a one-line command that runs the built `nchat`.
+- `~/.local/share/applications/tui_chat.desktop`, an entry that opens tui_chat in a
+  kitty window of its own (window class `tui_chat`), so it shows up in an
+  application launcher.
+
+Run it with `--uninstall` to remove both. It never overwrites a file it did not
+write, and it does not enable anything at login. Set `TUI_CHAT_BIN` if the binary is
+not at `build/bin/nchat`.
+
 ## What starts when
 
 - Nothing starts at login.
