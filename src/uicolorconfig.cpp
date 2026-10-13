@@ -27,11 +27,19 @@ void UiColorConfig::Init()
     start_color();
   }
 
-  const std::string defaultReactionColor = (COLORS > 8) ? "gray" : "";
-  const std::string defaultSentColor = (COLORS > 8) ? "gray" : "";
-  const std::string defaultShadedColor = (COLORS > 8) ? "gray" : "";
-  const std::string defaultQuotedColor = (COLORS > 8) ? "gray" : "";
-  const std::string defaultAttachmentColor = (COLORS > 8) ? "gray" : "";
+  // "gray" is ANSI bright black, which many themes set close to the background
+  // colour, so quoted, reaction and attachment text vanished. A fixed palette entry
+  // from the 256 colour cube (245, a mid grey) reads the same under any theme.
+  const std::string defaultMutedColor = (COLORS >= 256) ? "245" : ((COLORS > 8) ? "gray" : "");
+  const std::string defaultReactionColor = defaultMutedColor;
+  const std::string defaultShadedColor = defaultMutedColor;
+  const std::string defaultQuotedColor = defaultMutedColor;
+  const std::string defaultAttachmentColor = defaultMutedColor;
+  // Sent messages use the terminal's own text colour so they stay as readable as
+  // anything else. The other side's name carries the accent instead, which is what
+  // tells the two sides apart along with the alignment.
+  const std::string defaultSentColor = "";
+  const std::string defaultRecvNameColor = "magenta";
   const std::map<std::string, std::string> defaultConfig =
   {
     { "top_attr", "reverse" },
@@ -77,7 +85,7 @@ void UiColorConfig::Init()
     { "history_name_sent_color_bg", "" },
     { "history_name_sent_color_fg", defaultSentColor },
     { "history_name_recv_color_bg", "" },
-    { "history_name_recv_color_fg", "" },
+    { "history_name_recv_color_fg", defaultRecvNameColor },
     { "history_name_recv_group_color_bg", "" },
     { "history_name_recv_group_color_fg", "" },
 
