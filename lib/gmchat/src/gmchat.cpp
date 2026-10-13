@@ -397,6 +397,8 @@ GmChat::EstablishResult GmChat::Establish(bool p_Verbose)
     std::lock_guard<std::mutex> lock(m_StateMutex);
     m_HelperError = GetStr(*statusResult, "error");
     m_HelperHint = GetStr(*statusResult, "hint");
+    const std::string emoji = GetStr(*statusResult, "emoji");
+    if (!emoji.empty()) m_PairEmoji = emoji;
   }
 
   ApplyState(state);
@@ -854,8 +856,12 @@ void GmChat::OnEvent(const std::string& p_Event, const rapidjson::Value& p_Data)
   {
     {
       std::lock_guard<std::mutex> lock(m_StateMutex);
-      m_HelperError = GetStr(p_Data, "error");
-      m_HelperHint = GetStr(p_Data, "hint");
+      // keep the last error and hint until the next attempt, a later status that
+      // carries none must not wipe what the person is about to be shown
+      const std::string error = GetStr(p_Data, "error");
+      const std::string hint = GetStr(p_Data, "hint");
+      if (!error.empty()) m_HelperError = error;
+      if (!hint.empty()) m_HelperHint = hint;
       const std::string emoji = GetStr(p_Data, "emoji");
       if (!emoji.empty()) m_PairEmoji = emoji;
       const std::string qr = GetStr(p_Data, "qrURL");
@@ -1179,6 +1185,21 @@ bool GmChat::SetupProfile(const std::string& p_ProfilesDir, std::string& p_Profi
     return true;
   }
 
+  std::string pendingState;
+  {
+    std::lock_guard<std::mutex> lock(m_StateMutex);
+    pendingState = m_HelperState;
+  }
+
+  if (pendingState == "gaiaPairing")
+  {
+    // an earlier attempt is still waiting on the phone, so join it rather than start another
+    std::cout << "A pairing attempt from earlier is still waiting for your phone.\n";
+    const bool joined = WaitForPairing();
+    m_IsSetup = false;
+    return joined;
+  }
+
   std::cout << "How would you like to pair?\n"
             << "  1. Sign in with the Google account from your browser (works with current Messages)\n"
             << "  2. Scan a QR code (older versions of Messages only)\n"
@@ -1221,6 +1242,10 @@ bool GmChat::PairWithBrowser()
     m_PairEmoji.clear();
     m_HelperError.clear();
     m_HelperHint.clear();
+    // Forget the state seen before this attempt. A helper that failed an earlier
+    // attempt stays in its error state until asked again, and that old state would
+    // otherwise look like this attempt had already failed.
+    m_HelperState = "requested";
   }
 
   GmReply reply = m_Client->Call("pairFromBrowser", "", 90000);
@@ -1237,38 +1262,56 @@ bool GmChat::PairWithBrowser()
     return false;
   }
 
+  return WaitForPairing();
+}
+
+// Waits for the confirmation emoji, shows it, then waits for the phone. Only
+// states seen since the attempt was requested count, see PairWithBrowser.
+bool GmChat::WaitForPairing()
+{
   std::cout << "Waiting for Google to show a confirmation emoji...\n";
 
-  // either the emoji arrives, or the helper reports a failure
-  bool failed = false;
-  const bool gotEmoji = WaitForState([this, &failed]()
+  WaitForState([this]()
   {
-    if (!m_PairEmoji.empty()) return true;
-
-    if ((m_HelperState == "error") || (m_HelperState == "connected"))
-    {
-      failed = (m_HelperState == "error");
-      return true;
-    }
-
-    return false;
+    return !m_PairEmoji.empty() || (m_HelperState == "error") || (m_HelperState == "connected");
   }, 120000);
 
   std::string emoji;
+  std::string state;
   std::string error;
   std::string hint;
   {
     std::lock_guard<std::mutex> lock(m_StateMutex);
     emoji = m_PairEmoji;
+    state = m_HelperState;
     error = m_HelperError;
     hint = m_HelperHint;
   }
 
-  if (!gotEmoji || failed || emoji.empty())
+  if (emoji.empty())
   {
+    if (state == "connected")
+    {
+      std::cout << "Paired. Google Messages is connected.\n";
+      return true;
+    }
+
     std::cout << "Pairing did not get as far as the emoji.\n";
-    if (!error.empty()) std::cout << error << "\n";
-    if (!hint.empty()) std::cout << hint << "\n";
+    if (state == "error")
+    {
+      if (!error.empty()) std::cout << error << "\n";
+      if (!hint.empty()) std::cout << hint << "\n";
+      if (error.empty() && hint.empty())
+      {
+        std::cout << "The helper reported a problem without details. Its log is\n"
+                  << m_ProfileDir << "/helper.log\n";
+      }
+    }
+    else
+    {
+      std::cout << "No emoji appeared within two minutes (the helper was in state \"" << state << "\").\n";
+    }
+
     return false;
   }
 
@@ -1285,7 +1328,6 @@ bool GmChat::PairWithBrowser()
     return (m_HelperState == "connected") || (m_HelperState == "error") || (m_HelperState == "unpaired");
   }, 190000);
 
-  std::string state;
   {
     std::lock_guard<std::mutex> lock(m_StateMutex);
     state = m_HelperState;

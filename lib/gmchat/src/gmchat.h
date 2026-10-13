@@ -95,6 +95,7 @@ private:
   // setup wizard
   bool WaitForState(const std::function<bool()>& p_Predicate, int p_TimeoutMs);
   bool PairWithBrowser();
+  bool WaitForPairing();
   bool PairWithQr();
 
 private:

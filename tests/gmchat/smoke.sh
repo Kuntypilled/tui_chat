@@ -31,7 +31,19 @@ fail=0
 
 # Each driver run is a fresh process, so state that must carry over (the paired
 # helper and the config directory) lives in $work.
-echo "== pairing wizard"
+# A first attempt that fails leaves the helper in its error state, which stays
+# until pairing is tried again. The second attempt must not mistake that old state
+# for its own result.
+mkdir -p "$work/fake"
+touch "$work/fake/fail_next"
+echo "== pairing wizard, first attempt fails with the helper's own hint"
+out="$(python3 -I "$here/drive.py" 110 36 \
+  "wait:1;expect:Select protocol;send:1\r;expect:Continue;send:y\r;expect:Choose;send:\r;expect:Let the helper read;send:y\r;expect:did not get as far;expect:Not signed in to Google Messages;expect:Open messages.google.com/web;wait:0.5" \
+  -- "$nchat" -s -d "$work/conf")"
+echo "$out" | grep -E '^(PASS|FAIL)'
+echo "$out" | grep -q '^FAIL' && fail=1
+
+echo "== pairing wizard, second attempt works"
 out="$(python3 -I "$here/drive.py" 110 36 \
   "wait:1;expect:Select protocol;send:1\r;expect:Continue;send:y\r;expect:Choose;send:\r;expect:Let the helper read;send:y\r;expect:confirm this;expect:Alex Rivera;wait:1" \
   -- "$nchat" -s -d "$work/conf")"

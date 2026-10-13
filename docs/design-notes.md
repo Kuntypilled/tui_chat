@@ -66,6 +66,12 @@ Each of these was read in the source or observed by running the program.
     left press and the wheel are acted on.
 15. A reverse-video background cannot be switched off for part of a window, so the
     top bar applies its attribute to the text and not to the background.
+16. A helper that failed one pairing attempt stays in its error state until asked
+    again. A client must forget the state it saw before a new attempt, or the old
+    error looks like the new attempt's result. The wizard did exactly that at first.
+17. If the pairing wizard quits before showing the emoji, the phone still gets the
+    prompt but the person cannot match it, and the helper logs "user cancelled
+    pairing on phone".
 
 ## Planned work, in order
 

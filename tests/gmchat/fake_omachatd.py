@@ -4,6 +4,8 @@
 Flags: -socket PATH, -log-level LEVEL (accepted and ignored), -version
 Env:   FAKE_STATE_DIR  where state, the request log and the inject file live
        FAKE_PAIR_FAIL  when set, pairFromBrowser fails with a hint
+A file named fail_next in FAKE_STATE_DIR makes the next pairing attempt fail,
+and is removed when it does.
 Inject an incoming message by appending a line "chatId|text|senderId" to
 $FAKE_STATE_DIR/inject.
 """
@@ -161,8 +163,18 @@ def config_json(restart=False):
 
 def pair_thread():
     global transient_state, transient_emoji, transient_error
-    time.sleep(0.8)
-    if os.environ.get("FAKE_PAIR_FAIL"):
+    # Like the real helper, answer first and only then move to the pairing state, so
+    # a client that trusts the state it saw before asking is caught out. The state
+    # left behind by an earlier failed attempt stays visible until here.
+    time.sleep(0.3)
+    transient_state = "gaiaPairing"
+    broadcast_status()
+    time.sleep(0.5)
+    fail_file = os.path.join(state_dir, "fail_next")
+    fail = bool(os.environ.get("FAKE_PAIR_FAIL")) or os.path.exists(fail_file)
+    if os.path.exists(fail_file):
+        os.remove(fail_file)
+    if fail:
         transient_state = "error"
         transient_error = ("Not signed in to Google Messages", "Open messages.google.com/web in a browser, then try again.")
         broadcast_status()
@@ -220,8 +232,6 @@ def handle(req):
     if "gmessages" not in state["enabled"]:
         return fail("service disabled; enable it in Settings before using it")
     if method == "pairFromBrowser":
-        transient_state = "gaiaPairing"
-        broadcast_status()
         threading.Thread(target=pair_thread, daemon=True).start()
         return ok(None)
     if method == "startPairing":
