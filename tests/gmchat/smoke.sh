@@ -96,6 +96,15 @@ else
   echo "PASS no rounded corners"
 fi
 
+# In a narrow window the name and time do not both fit on the top border. The name
+# gives way with an ellipsis and the time stays, and the box still closes.
+echo "== narrow window shortens the name and keeps the time"
+out="$(python3 -I "$here/drive.py" 40 24 \
+  "wait:2;expect:Alex Rivera;expect:incoming smoke;snap:narrow" \
+  -- "$nchat" -d "$work/conf")"
+echo "$out" | sed -n '/^---- screen: narrow/,/^----$/p' | sed 's/ *$//'
+check_boxes "name shortened with an ellipsis, time kept, border closed" '┌─ [^ ─]+… \([0-9:]+\) ─*┐'
+
 echo "== helper restart is survived"
 out="$(python3 -I "$here/drive.py" 110 20 \
   "wait:2;expect:Online;run:kill \$(cat $work/fake/pid);wait:1;expect:Online;run:printf 'c_num|after the restart|u_x\n' >> $work/fake/inject;expect:after the restart" \

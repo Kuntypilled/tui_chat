@@ -62,16 +62,33 @@ static std::wstring RepeatWString(const std::wstring& p_Str, int p_Count)
 
 // The label cut into the top border of a message's box: the sender's name followed by
 // the details (time, read receipt, edited and pinned marks). It must come out no wider
-// than p_MaxWidth columns, so a long name or a narrow window has to give something up.
-//
-// TODO(human): decide what gives way. The placeholder below cuts the end off the whole
-// label, so a long name loses the time first.
-static std::wstring FitHeaderLabel(const std::wstring& p_Sender, const std::wstring& p_Details, int p_MaxWidth)
+// than p_MaxWidth columns. What gives way, in this order:
+//   1. nothing, when it all fits
+//   2. the marks (read receipt, edited, pinned), keeping the whole name and the time
+//   3. the end of the name, replaced by an ellipsis, keeping the time
+//   4. the time too, when not even a letter of the name fits beside it
+static std::wstring FitHeaderLabel(const std::wstring& p_Sender, const std::wstring& p_Time,
+                                   const std::wstring& p_Marks, int p_MaxWidth)
 {
-  const std::wstring full = p_Sender + p_Details;
-  if (StrUtil::WStringWidth(full) <= p_MaxWidth) return full;
+  static const std::wstring ellipsis = L"…";
+  const int maxWidth = std::max(0, p_MaxWidth);
 
-  return StrUtil::TrimPadWString(full, p_MaxWidth);
+  if (StrUtil::WStringWidth(p_Sender + p_Time + p_Marks) <= maxWidth) return p_Sender + p_Time + p_Marks;
+  if (StrUtil::WStringWidth(p_Sender + p_Time) <= maxWidth) return p_Sender + p_Time;
+
+  // Cut the name down to the room beside the time, leaving one column for the ellipsis.
+  // Room for at least one letter is needed.
+  const int room = maxWidth - StrUtil::WStringWidth(p_Time);
+  if (room >= 2)
+  {
+    return StrUtil::TrimPadWString(p_Sender, room - 1) + ellipsis + p_Time;
+  }
+
+  // Not even that fits, so show the name alone, cut to the width if it is too wide
+  if (StrUtil::WStringWidth(p_Sender) <= maxWidth) return p_Sender;
+  if (maxWidth >= 2) return StrUtil::TrimPadWString(p_Sender, maxWidth - 1) + ellipsis;
+
+  return StrUtil::TrimPadWString(p_Sender, maxWidth);
 }
 
 void UiHistoryView::Draw()
@@ -408,11 +425,11 @@ void UiHistoryView::Draw()
     std::wstring wreceipt = StrUtil::ToWString(msg.isRead ? readIndicator : "");
     std::wstring wedited = StrUtil::ToWString(msg.isEdited ? editedIndicator : "");
     std::wstring wpinned = StrUtil::ToWString(msg.isPinned ? pinnedIndicator : "");
-    std::wstring wdetails = wtime + wreceipt + wedited + wpinned;
+    std::wstring wmarks = wreceipt + wedited + wpinned;
 
     if (developerMode)
     {
-      wdetails = wdetails +
+      wmarks = wmarks +
         L" msg " + StrUtil::ToWString(msg.id) +
         L" user " + StrUtil::ToWString(msg.senderId);
     }
@@ -421,7 +438,7 @@ void UiHistoryView::Draw()
     // so four columns wider than its text. The top border needs a corner, a dash and a
     // space before the label, and a space, at least one dash and a corner after it.
     const int maxLabelWidth = std::max(0, wrapWidth - 6);
-    const std::wstring wlabel = FitHeaderLabel(wsender, wdetails, maxLabelWidth);
+    const std::wstring wlabel = FitHeaderLabel(wsender, wtime, wmarks, maxLabelWidth);
     const int labelWidth = StrUtil::WStringWidth(wlabel);
 
     int textWidth = 0;
