@@ -48,35 +48,30 @@ UiHistoryView::~UiHistoryView()
   }
 }
 
-// The text to draw for one line, and the column to draw it at. Left aligned lines are
-// padded to the full width, as they always were. Right aligned lines are drawn without
-// padding and end at the right edge, so a selected message is highlighted over its
-// words and not across the whole row.
-static std::wstring PlaceLine(const std::wstring& p_Line, int p_Width, bool p_AlignRight, bool p_KeepSpaces,
-                              int& p_X)
+// Repeats a string, used for the dashes along a message box's borders.
+static std::wstring RepeatWString(const std::wstring& p_Str, int p_Count)
 {
-  p_X = 0;
-  if (!p_AlignRight)
+  std::wstring result;
+  for (int i = 0; i < p_Count; ++i)
   {
-    return p_KeepSpaces ? p_Line : StrUtil::TrimPadWString(p_Line, p_Width);
+    result += p_Str;
   }
 
-  std::wstring line = p_Line;
-  if (!p_KeepSpaces)
-  {
-    while (!line.empty() && (line.back() == L' '))
-    {
-      line.pop_back();
-    }
-  }
+  return result;
+}
 
-  if (StrUtil::WStringWidth(line) > p_Width)
-  {
-    line = StrUtil::TrimPadWString(line, p_Width);
-  }
+// The label cut into the top border of a message's box: the sender's name followed by
+// the details (time, read receipt, edited and pinned marks). It must come out no wider
+// than p_MaxWidth columns, so a long name or a narrow window has to give something up.
+//
+// TODO(human): decide what gives way. The placeholder below cuts the end off the whole
+// label, so a long name loses the time first.
+static std::wstring FitHeaderLabel(const std::wstring& p_Sender, const std::wstring& p_Details, int p_MaxWidth)
+{
+  const std::wstring full = p_Sender + p_Details;
+  if (StrUtil::WStringWidth(full) <= p_MaxWidth) return full;
 
-  p_X = std::max(0, p_Width - StrUtil::WStringWidth(line));
-  return line;
+  return StrUtil::TrimPadWString(full, p_MaxWidth);
 }
 
 void UiHistoryView::Draw()
@@ -119,6 +114,9 @@ void UiHistoryView::Draw()
   static const bool sentAlignRight = UiConfig::GetBool("history_sent_align_right");
   static const int maxWidthPercent = std::min(100, std::max(30, UiConfig::GetNum("history_max_width_percent")));
   const int wrapWidth = std::max(std::min(m_PaddedW, 20), (m_PaddedW * maxWidthPercent) / 100);
+
+  // Each message sits in a box, a border and a space of padding either side of the text.
+  const int contentWidth = std::max(1, wrapWidth - 4);
 
   werase(m_PaddedWin);
   wbkgd(m_PaddedWin, attributeTextNormal | colorPairTextRecv | ' ');
@@ -169,7 +167,7 @@ void UiHistoryView::Draw()
         text = StrUtil::Textize(text);
       }
 
-      wlines = StrUtil::WordWrap(StrUtil::ToWString(text), wrapWidth, false, false, false, 2);
+      wlines = StrUtil::WordWrap(StrUtil::ToWString(text), contentWidth, false, false, false, 2);
     }
 
     // Quoted message
@@ -199,7 +197,7 @@ void UiHistoryView::Draw()
         quotedText = "";
       }
 
-      int maxQuoteLen = wrapWidth - 3;
+      int maxQuoteLen = contentWidth - 3;
       std::wstring quote = quoteIndicator + StrUtil::ToWString(quotedText);
       if (StrUtil::WStringWidth(quote) > maxQuoteLen)
       {
@@ -327,7 +325,7 @@ void UiHistoryView::Draw()
             reactionsText = StrUtil::Textize(reactionsText);
           }
 
-          const int maxReactionsLen = wrapWidth - 4;
+          const int maxReactionsLen = contentWidth - 4;
           std::wstring reactions = StrUtil::ToWString(reactionsText);
           if (StrUtil::WStringWidth(reactions) > maxReactionsLen)
           {
@@ -344,7 +342,8 @@ void UiHistoryView::Draw()
       }
     }
 
-    const int maxMessageLines = (m_PaddedH - 1);
+    // Leave room for the top and bottom border
+    const int maxMessageLines = std::max(2, m_PaddedH - 2);
     if (firstMessage && ((int)wlines.size() > maxMessageLines))
     {
       wlines.resize(maxMessageLines - 1);
@@ -352,54 +351,12 @@ void UiHistoryView::Draw()
       reactionLines = 0;
     }
 
-    for (auto wline = wlines.rbegin(); wline != wlines.rend(); ++wline)
-    {
-      bool isAttachment = (wline->rfind(attachmentIndicator, 0) == 0);
-      bool isQuote = (wline->rfind(quoteIndicator, 0) == 0);
-      bool isReaction = (reactionLines == 1) && (std::distance(wline, wlines.rbegin()) == 0);
-
-      if (isAttachment)
-      {
-        wattron(m_PaddedWin, attributeText | colorPairTextAttachment);
-      }
-      else if (isQuote)
-      {
-        wattron(m_PaddedWin, attributeText | colorPairTextQuoted);
-      }
-      else if (isReaction)
-      {
-        wattron(m_PaddedWin, attributeTextNormal | colorPairTextReaction);
-      }
-      else
-      {
-        wattron(m_PaddedWin, attributeText | colorPairText);
-      }
-
-      int x = 0;
-      const std::wstring wdisp = PlaceLine(*wline, m_PaddedW, (sentAlignRight && msg.isOutgoing), isReaction, x);
-      mvwaddnwstr(m_PaddedWin, y, x, wdisp.c_str(), std::min((int)wdisp.size(), m_PaddedW - x));
-
-      if (isAttachment)
-      {
-        wattroff(m_PaddedWin, attributeText | colorPairTextAttachment);
-      }
-      else if (isQuote)
-      {
-        wattroff(m_PaddedWin, attributeText | colorPairTextQuoted);
-      }
-      else if (isReaction)
-      {
-        wattroff(m_PaddedWin, attributeTextNormal | colorPairTextReaction);
-      }
-      else
-      {
-        wattroff(m_PaddedWin, attributeText | colorPairText);
-      }
-
-      if (--y < 0) break;
-    }
-
-    if (y < 0) break;
+    // Name, time and receipt go on the top border of the message's box, so they are
+    // worked out before anything is drawn: the box is as wide as the longest of them
+    // and the text. A message cut off at the top of the pane is not marked as read, as
+    // its name and time are not on screen.
+    const int bodyLines = (int)wlines.size();
+    const bool fitsOnScreen = ((y - bodyLines - 1) >= 0);
 
     int attributeName = isSelectedMessage ? attributeNameSelected : attributeNameNormal;
     int colorPairName = [&]()
@@ -420,7 +377,6 @@ void UiHistoryView::Draw()
       return colorPairGroup;
     }();
 
-    wattron(m_PaddedWin, attributeName | colorPairName);
     std::string name = m_Model->GetContactNameLocked(currentChat.first, msg.senderId);
     if (!emojiEnabled)
     {
@@ -441,7 +397,10 @@ void UiHistoryView::Draw()
       }
     }
 
-    m_Model->MarkReadLocked(currentChat.first, currentChat.second, *it, (!msg.isOutgoing && !msg.isRead));
+    if (fitsOnScreen)
+    {
+      m_Model->MarkReadLocked(currentChat.first, currentChat.second, *it, (!msg.isOutgoing && !msg.isRead));
+    }
 
     static const std::string readIndicator = " " + UiConfig::GetStr("read_indicator");
     static const std::string editedIndicator = " " + UiConfig::GetStr("edited_indicator");
@@ -449,20 +408,92 @@ void UiHistoryView::Draw()
     std::wstring wreceipt = StrUtil::ToWString(msg.isRead ? readIndicator : "");
     std::wstring wedited = StrUtil::ToWString(msg.isEdited ? editedIndicator : "");
     std::wstring wpinned = StrUtil::ToWString(msg.isPinned ? pinnedIndicator : "");
-    std::wstring wheader = wsender + wtime + wreceipt + wedited + wpinned;
+    std::wstring wdetails = wtime + wreceipt + wedited + wpinned;
 
     if (developerMode)
     {
-      wheader = wheader +
+      wdetails = wdetails +
         L" msg " + StrUtil::ToWString(msg.id) +
         L" user " + StrUtil::ToWString(msg.senderId);
     }
 
-    int headerX = 0;
-    std::wstring wdisp = PlaceLine(wheader, m_PaddedW, (sentAlignRight && msg.isOutgoing), false, headerX);
-    mvwaddnwstr(m_PaddedWin, y, headerX, wdisp.c_str(), std::min((int)wdisp.size(), m_PaddedW - headerX));
+    // A box is a corner, a space of padding, the text, a space of padding and a corner,
+    // so four columns wider than its text. The top border needs a corner, a dash and a
+    // space before the label, and a space, at least one dash and a corner after it.
+    const int maxLabelWidth = std::max(0, wrapWidth - 6);
+    const std::wstring wlabel = FitHeaderLabel(wsender, wdetails, maxLabelWidth);
+    const int labelWidth = StrUtil::WStringWidth(wlabel);
 
-    wattroff(m_PaddedWin, attributeName | colorPairName);
+    int textWidth = 0;
+    for (const std::wstring& wline : wlines)
+    {
+      textWidth = std::max(textWidth, StrUtil::WStringWidth(wline));
+    }
+
+    const int boxWidth = std::min(std::max(textWidth + 4, labelWidth + 6), wrapWidth);
+    const int innerWidth = std::max(0, boxWidth - 4);
+    const bool alignRight = sentAlignRight && msg.isOutgoing;
+    const int boxX = alignRight ? std::max(0, m_PaddedW - boxWidth) : 0;
+
+    // The border takes the name's colour but not its bold, so the label stands out
+    // along the border. A selected message has its whole box reversed.
+    const int borderStyle = (isSelectedMessage ? attributeNameSelected : (int)A_NORMAL) | colorPairName;
+    const int labelStyle = attributeName | colorPairName;
+
+    auto put = [&](int p_Y, int p_X, const std::wstring& p_Str, int p_Style)
+    {
+      if ((p_X < 0) || (p_X >= m_PaddedW)) return;
+      wattron(m_PaddedWin, p_Style);
+      mvwaddnwstr(m_PaddedWin, p_Y, p_X, p_Str.c_str(), std::min((int)p_Str.size(), m_PaddedW - p_X));
+      wattroff(m_PaddedWin, p_Style);
+    };
+
+    // Bottom border
+    put(y, boxX, L"└" + RepeatWString(L"─", boxWidth - 2) + L"┘", borderStyle);
+    if (--y < 0) break;
+
+    // Text, drawn from the last line upwards
+    for (auto wline = wlines.rbegin(); wline != wlines.rend(); ++wline)
+    {
+      bool isAttachment = (wline->rfind(attachmentIndicator, 0) == 0);
+      bool isQuote = (wline->rfind(quoteIndicator, 0) == 0);
+      bool isReaction = (reactionLines == 1) && (std::distance(wline, wlines.rbegin()) == 0);
+
+      int lineStyle = attributeText | colorPairText;
+      if (isAttachment)
+      {
+        lineStyle = attributeText | colorPairTextAttachment;
+      }
+      else if (isQuote)
+      {
+        lineStyle = attributeText | colorPairTextQuoted;
+      }
+      else if (isReaction)
+      {
+        lineStyle = attributeTextNormal | colorPairTextReaction;
+      }
+
+      put(y, boxX, L"│", borderStyle);
+      put(y, boxX + 1, L" " + StrUtil::TrimPadWString(*wline, innerWidth) + L" ", lineStyle);
+      put(y, boxX + boxWidth - 1, L"│", borderStyle);
+
+      if (--y < 0) break;
+    }
+
+    if (y < 0) break;
+
+    // Top border with the name and time cut into it, a space either side
+    if (labelWidth > 0)
+    {
+      put(y, boxX, L"┌─ ", borderStyle);
+      put(y, boxX + 3, wlabel, labelStyle);
+      put(y, boxX + 3 + labelWidth,
+          L" " + RepeatWString(L"─", boxWidth - labelWidth - 5) + L"┐", borderStyle);
+    }
+    else
+    {
+      put(y, boxX, L"┌" + RepeatWString(L"─", boxWidth - 2) + L"┐", borderStyle);
+    }
 
     ++m_HistoryShowCount;
 

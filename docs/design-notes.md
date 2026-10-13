@@ -99,6 +99,14 @@ Each of these was read in the source or observed by running the program.
 4. A message arriving in the chat that is open on screen does not notify. Messages
    in any other chat do.
 5. Messages sent from another device never notify.
+6. Each message sits in a box with hard corners. The sender's name and the time are
+   cut into the top border, with a space either side and a dash before them, as the
+   chat name is on the border above the prompt in Claude Code. Sent boxes end at the
+   right edge of the pane, received ones start at the left. A box is as wide as its
+   longest line or its label, up to the same share of the pane as before.
+7. Sent text and names use the terminal's own text colour. The other side's name is
+   the accent (magenta), and muted elements use a fixed mid grey, because ANSI bright
+   black is often close to the background in a theme.
 
 ## Open questions
 

@@ -70,6 +70,32 @@ else
   fail=1
 fi
 
+# Each message sits in a box with hard corners. The name and time are cut into the top
+# border with a space either side, and sent boxes end at the right edge of the pane.
+echo "== messages in boxes with the label on the top border"
+out="$(python3 -I "$here/drive.py" 110 36 \
+  "wait:2;expect:Alex Rivera;expect:hello from smoke;expect:incoming smoke message;snap:boxes" \
+  -- "$nchat" -d "$work/conf")"
+echo "$out" | sed -n '/^---- screen: boxes/,/^----$/p'
+check_boxes() {
+  local what="$1" pattern="$2"
+  if echo "$out" | grep -Eq -- "$pattern"; then
+    echo "PASS $what"
+  else
+    echo "FAIL $what"
+    fail=1
+  fi
+}
+check_boxes "top border with the label inline" '┌─ [^─│┌┐└┘]+ ─+┐'
+check_boxes "bottom border" '└─+┘'
+check_boxes "text between side borders" '│ hello from smoke +│'
+if echo "$out" | grep -q '[╭╮╯╰]'; then
+  echo "FAIL rounded corners found"
+  fail=1
+else
+  echo "PASS no rounded corners"
+fi
+
 echo "== helper restart is survived"
 out="$(python3 -I "$here/drive.py" 110 20 \
   "wait:2;expect:Online;run:kill \$(cat $work/fake/pid);wait:1;expect:Online;run:printf 'c_num|after the restart|u_x\n' >> $work/fake/inject;expect:after the restart" \
