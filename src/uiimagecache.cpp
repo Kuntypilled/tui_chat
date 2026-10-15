@@ -61,7 +61,7 @@ struct Entry
 
 std::mutex s_Mutex;
 std::condition_variable s_CondVar;
-std::deque<std::string> s_Queue;
+std::deque<std::pair<std::string, std::string>> s_Queue; // path, mime type
 std::map<std::string, Entry> s_Entries;
 std::thread s_Thread;
 bool s_Stop = false;
@@ -132,11 +132,45 @@ std::string CoderFor(const std::string& p_Path, const std::string& p_MimeType)
   if (ext == "png") return "png";
   if (ext == "gif") return "gif";
   if (ext == "webp") return "webp";
+  if ((ext == "heic") || (ext == "heif")) return "heic";
+  if (ext == "avif") return "avif";
 
   if ((p_MimeType == "image/jpeg") || (p_MimeType == "image/jpg")) return "jpeg";
   if (p_MimeType == "image/png") return "png";
   if (p_MimeType == "image/gif") return "gif";
   if (p_MimeType == "image/webp") return "webp";
+  if ((p_MimeType == "image/heic") || (p_MimeType == "image/heif")) return "heic";
+  if (p_MimeType == "image/avif") return "avif";
+  return "";
+}
+
+// The decoder named by the file's first bytes, from the same short list. A file's
+// extension is a poor guide: the helper stores types it does not know as ".bin", and an
+// iPhone photo may arrive as HEIC under a ".jpg" name.
+std::string SniffCoder(const std::string& p_Path)
+{
+  FILE* f = fopen(p_Path.c_str(), "rb");
+  if (f == nullptr) return "";
+
+  unsigned char b[16] = { 0 };
+  const size_t n = fread(b, 1, sizeof(b), f);
+  fclose(f);
+
+  if ((n >= 3) && (b[0] == 0xFF) && (b[1] == 0xD8) && (b[2] == 0xFF)) return "jpeg";
+  if ((n >= 8) && (memcmp(b, "\x89PNG\r\n\x1a\n", 8) == 0)) return "png";
+  if ((n >= 4) && (memcmp(b, "GIF8", 4) == 0)) return "gif";
+  if ((n >= 12) && (memcmp(b, "RIFF", 4) == 0) && (memcmp(b + 8, "WEBP", 4) == 0)) return "webp";
+  if ((n >= 12) && (memcmp(b + 4, "ftyp", 4) == 0))
+  {
+    const std::string brand(reinterpret_cast<const char*>(b + 8), 4);
+    if ((brand == "avif") || (brand == "avis")) return "avif";
+    static const char* heicBrands[] = { "heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1" };
+    for (const char* heic : heicBrands)
+    {
+      if (brand == heic) return "heic";
+    }
+  }
+
   return "";
 }
 
@@ -249,7 +283,7 @@ bool RunMagick(const std::string& p_Coder, const std::string& p_Src, const std::
   }
 }
 
-void MakeThumb(const std::string& p_Src)
+void MakeThumb(const std::string& p_Src, const std::string& p_MimeType)
 {
   Entry entry;
   entry.image.state = UiImage::Failed;
@@ -259,7 +293,8 @@ void MakeThumb(const std::string& p_Src)
     struct stat st;
     if ((p_Src.empty()) || (p_Src[0] != '/') || (stat(p_Src.c_str(), &st) != 0) || !S_ISREG(st.st_mode)) break;
 
-    const std::string coder = CoderFor(p_Src, "");
+    std::string coder = SniffCoder(p_Src);
+    if (coder.empty()) coder = CoderFor(p_Src, p_MimeType);
     if (coder.empty()) break;
 
     const std::string key = p_Src + "|" + std::to_string((long long)st.st_size) + "|" +
@@ -325,16 +360,18 @@ void Worker()
   while (true)
   {
     std::string src;
+    std::string mime;
     {
       std::unique_lock<std::mutex> lock(s_Mutex);
       s_CondVar.wait(lock, [] { return s_Stop || !s_Queue.empty(); });
       if (s_Stop) return;
 
-      src = s_Queue.front();
+      src = s_Queue.front().first;
+      mime = s_Queue.front().second;
       s_Queue.pop_front();
     }
 
-    MakeThumb(src);
+    MakeThumb(src, mime);
   }
 }
 
@@ -387,14 +424,15 @@ void UiImageCache::BeginFrame()
   ++s_Frame;
 }
 
-UiImage UiImageCache::Get(const std::string& p_FilePath)
+UiImage UiImageCache::Get(const std::string& p_FilePath, const std::string& p_MimeType)
 {
   std::lock_guard<std::mutex> lock(s_Mutex);
   auto it = s_Entries.find(p_FilePath);
   if (it != s_Entries.end()) return it->second.image;
 
   // A name of a kind that is not shown, or one with no usable path, is not worth a thread
-  if ((p_FilePath.empty()) || (p_FilePath[0] != '/') || CoderFor(p_FilePath, "").empty())
+  if ((p_FilePath.empty()) || (p_FilePath[0] != '/') ||
+      (CoderFor(p_FilePath, p_MimeType).empty() && SniffCoder(p_FilePath).empty()))
   {
     UiImage failed;
     failed.state = UiImage::Failed;
@@ -403,7 +441,7 @@ UiImage UiImageCache::Get(const std::string& p_FilePath)
 
   Entry pending;
   s_Entries[p_FilePath] = pending;
-  s_Queue.push_back(p_FilePath);
+  s_Queue.push_back(std::make_pair(p_FilePath, p_MimeType));
   if (!s_Thread.joinable())
   {
     s_Thread = std::thread(Worker);

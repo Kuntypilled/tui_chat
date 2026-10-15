@@ -42,7 +42,7 @@ public:
   static void BeginFrame();
 
   // The state of a photo's thumbnail. Never blocks, starts the work when first asked.
-  static UiImage Get(const std::string& p_FilePath);
+  static UiImage Get(const std::string& p_FilePath, const std::string& p_MimeType);
 
   // The size in cells to show a thumbnail at, within the given limits
   static void Layout(const UiImage& p_Image, int p_MaxCols, int p_MaxRows, int& p_Cols, int& p_Rows);

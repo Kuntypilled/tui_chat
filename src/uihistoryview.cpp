@@ -293,7 +293,7 @@ void UiHistoryView::Draw()
       if (UiImageCache::Enabled() && (fileInfo.fileStatus == FileStatusDownloaded) &&
           UiImageCache::IsImageFile(fileInfo.filePath, fileInfo.fileType))
       {
-        const UiImage image = UiImageCache::Get(fileInfo.filePath);
+        const UiImage image = UiImageCache::Get(fileInfo.filePath, fileInfo.fileType);
         if (image.state == UiImage::Pending)
         {
           anyImagePending = true;

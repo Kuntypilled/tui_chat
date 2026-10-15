@@ -140,6 +140,14 @@ else
   echo "FAIL the helper was never asked for the photo"
   fail=1
 fi
+# an HEIC under a ".bin" name is still recognised by its content and shown
+if grep -qx k2 "$work/fake/media_served.log" 2>/dev/null && [ "$(ls "$work/conf/thumbs" 2>/dev/null | wc -l)" -ge 1 ]; then
+  heic_head="$(head -c 12 "$work/fake/media_k2.bin" 2>/dev/null | tail -c 8)"
+  echo "PASS an iPhone HEIC photo was fetched and given a thumbnail (file starts \"${heic_head:0:4}\"...)"
+else
+  echo "FAIL the HEIC photo was not fetched or thumbnailed"
+  fail=1
+fi
 if echo "$out" | grep -q '\[photo\]'; then
   echo "FAIL the placeholder fallback was drawn"
   fail=1

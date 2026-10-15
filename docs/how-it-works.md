@@ -76,8 +76,9 @@ drawn inside their message box, up to 40 columns and 14 rows. They are fetched w
 they come on screen, unless `attachment_prefetch` is `0`.
 
 - A background thread makes a thumbnail with ImageMagick (`magick` must be on the
-  path), at most 640 pixels, forcing the decoder from the file's extension so a file's
-  content cannot pick a different format. The thumbnails are kept in
+  path), at most 640 pixels. JPEG, PNG, GIF, WebP, HEIC (iPhone) and AVIF are shown. The
+  decoder is chosen from the file's first bytes out of that list and forced, so a
+  file's content cannot select any other format. The thumbnails are kept in
   `~/.config/nchat/thumbs/` and removed after a month.
 - The photo is handed to the terminal by file path and drawn as ordinary text cells
   (kitty's Unicode placeholders), so it scrolls and clips with the history. Until a

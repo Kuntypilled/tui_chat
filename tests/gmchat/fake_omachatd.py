@@ -9,7 +9,7 @@ and is removed when it does.
 Inject an incoming message by appending a line "chatId|text|senderId" to
 $FAKE_STATE_DIR/inject.
 """
-import json, os, socket, struct, sys, threading, time, uuid, zlib
+import json, os, socket, struct, subprocess, sys, threading, time, uuid, zlib
 
 args = sys.argv[1:]
 if "-version" in args:
@@ -102,6 +102,10 @@ for i, (who, text) in enumerate([
     add_message("c_club", text, False, who, 90 - i)
 add_message("c_club", "", False, JO, 80, attachments=[{
     "key": "k1", "mediaID": "x1", "name": "cover.jpg", "mimeType": "image/jpeg",
+    "isImage": True, "isGif": False, "isAudio": False, "isVideo": False}])
+# an iPhone photo: the helper names a type it does not know ".bin"
+add_message("c_club", "", False, SAM, 70, attachments=[{
+    "key": "k2", "mediaID": "x2", "name": "IMG_2817.heic", "mimeType": "image/heic",
     "isImage": True, "isGif": False, "isAudio": False, "isVideo": False}])
 add_message("c_num", "Hi, is this the right number for the plumber?", False, STRANGER, 5)
 
@@ -264,9 +268,20 @@ def handle(req):
         key = params.get("key", "")
         if not key:
             return fail("missing attachment key")
-        path = os.path.join(state_dir, "media_%s.png" % key)
-        if not os.path.exists(path):
-            make_png(path)
+        if key == "k2":
+            path = os.path.join(state_dir, "media_k2.bin")
+            if not os.path.exists(path):
+                src = os.path.join(state_dir, "media_k2_src.png")
+                make_png(src, 240, 320)
+                out = subprocess.run(["magick", src, "heic:" + path], capture_output=True)
+                if out.returncode != 0:
+                    return fail("cannot make a heic: " + out.stderr.decode()[:80])
+        else:
+            path = os.path.join(state_dir, "media_%s.png" % key)
+            if not os.path.exists(path):
+                make_png(path)
+        with open(os.path.join(state_dir, "media_served.log"), "a") as served:
+            served.write(key + "\n")
         return ok({"key": key, "path": path})
     if method == "conversations":
         count = params.get("count", 0)

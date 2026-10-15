@@ -1191,6 +1191,7 @@ bool GmChat::ConvertMessage(const rapidjson::Value& p_Msg, ChatMessage& p_ChatMe
       if (mime == "image/png") ext = "png";
       else if (mime == "image/gif") ext = "gif";
       else if (mime == "image/webp") ext = "webp";
+      else if ((mime == "image/heic") || (mime == "image/heif")) ext = "heic";
 
       const std::string cachedPath = GetStr(attachment, "path");
       const std::string name = GetStr(attachment, "name");
