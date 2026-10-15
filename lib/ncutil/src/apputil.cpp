@@ -49,7 +49,8 @@ void AppUtil::AssertionFailed()
 
 std::string AppUtil::GetAppName(bool p_WithVersion, bool p_WithBranch /*= false*/)
 {
-  std::string name = "nchat";
+  // the name shown to the user; the config folder keeps its nchat name
+  std::string name = "tui_chat";
   if (p_WithVersion)
   {
     name += " " + GetAppVersion();

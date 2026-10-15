@@ -107,6 +107,10 @@ Each of these was read in the source or observed by running the program.
 7. Sent text and names use the terminal's own text colour. The other side's name is
    the accent (magenta), and muted elements use a fixed mid grey, because ANSI bright
    black is often close to the background in a theme.
+8. The application is called tui_chat in the top bar and `--version`. Its config
+   folder keeps the name `~/.config/nchat` so nothing moves. WhatsApp's tab and
+   notification name is "WhatsApp".
+
 
 ## Open questions
 

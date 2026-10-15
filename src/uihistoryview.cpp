@@ -430,11 +430,15 @@ void UiHistoryView::Draw()
 
       if (msg.senderId == currentChat.second) return colorPairNameRecv;
 
+      // A group's names follow the received name colour unless a colour of their own
+      // is set, so the two sides of a group chat are told apart like those of a chat
+      // with one person.
       static bool isUserColor = UiColorConfig::IsUserColor("history_name_recv_group_color");
       if (!isUserColor)
       {
+        static bool hasGroupColor = UiColorConfig::HasForeground("history_name_recv_group_color");
         static int colorPairGroup = UiColorConfig::GetColorPair("history_name_recv_group_color");
-        return colorPairGroup;
+        return hasGroupColor ? colorPairGroup : colorPairNameRecv;
       }
 
       int colorPairGroup = UiColorConfig::GetUserColorPair("history_name_recv_group_color",

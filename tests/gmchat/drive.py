@@ -12,6 +12,7 @@ steps are separated by ';'
   gfx:               print how many kitty graphics commands were sent
   ph:                print how many screen rows hold image placeholder cells
   phcolor:           print the 256 colour numbers placeholder cells were drawn with
+  sgrbefore:TEXT     print the basic colour in force where TEXT was last drawn
   rightof:N:TEXT     pass if TEXT starts at screen column N or further right
   leftof:N:TEXT      pass if TEXT starts at screen column N or further left
 Prints the exit state at the end. Exit status is 1 if any expect failed.
@@ -294,6 +295,19 @@ def main():
         elif kind == "gfx":
             pump(0.3)
             print("GFX %d %s" % (len(screen.graphics), " | ".join(g.split(";")[0] for g in screen.graphics[-3:])))
+        elif kind == "sgrbefore":
+            pump(0.3)
+            # the colour in force where the last occurrence of TEXT was drawn
+            pos = screen.raw.rfind(arg.encode("utf-8"))
+            colour = "none"
+            if pos >= 0:
+                for m in re.finditer(rb"\x1b\[([0-9;:]*)m", screen.raw[max(0, pos - 400):pos]):
+                    for p in m.group(1).decode().split(";"):
+                        if p in ("39", "0", ""):
+                            colour = "default"
+                        elif p.isdigit() and (30 <= int(p) <= 37 or 90 <= int(p) <= 97):
+                            colour = p
+            print("SGR %s %s" % (arg, colour))
         elif kind == "phcolor":
             pump(0.3)
             ids = sorted(set(int(m) for m in re.findall(rb"38;5;(\d+)m[^\x1b]{0,3}\xf4\x8e\xbb\xae", screen.raw)))

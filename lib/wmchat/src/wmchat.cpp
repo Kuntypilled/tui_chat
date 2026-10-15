@@ -55,8 +55,8 @@ std::string WmChat::GetProfileId() const
 
 std::string WmChat::GetProfileDisplayName() const
 {
-  std::string profileDisplayName = m_Config.Get("profile_display_name");
-  return profileDisplayName;
+  const std::string profileDisplayName = m_Config.Get("profile_display_name");
+  return profileDisplayName.empty() ? "WhatsApp" : profileDisplayName;
 }
 
 bool WmChat::HasFeature(ProtocolFeature p_ProtocolFeature) const

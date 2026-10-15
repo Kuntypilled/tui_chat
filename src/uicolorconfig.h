@@ -23,6 +23,7 @@ public:
   // pair number as it is, not wrapped in COLOR_PAIR(), or 0 when none can be made.
   static int GetForegroundPair(int p_Fg);
   static bool IsUserColor(const std::string& p_Param); // ex: "top_color"
+  static bool HasForeground(const std::string& p_Param); // true when the _fg value is set
   static int GetAttribute(const std::string& p_Param); // ex: "top_attr"
 
 private:

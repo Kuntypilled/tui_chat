@@ -213,6 +213,11 @@ int UiColorConfig::GetUserColorPair(const std::string& p_Param, const std::strin
   return colorPairs[userIdColor];
 }
 
+bool UiColorConfig::HasForeground(const std::string& p_Param)
+{
+  return !m_Config.Get(p_Param + "_fg").empty();
+}
+
 bool UiColorConfig::IsUserColor(const std::string& p_Param)
 {
   return (m_Config.Get(p_Param + "_fg") == userColor) ||

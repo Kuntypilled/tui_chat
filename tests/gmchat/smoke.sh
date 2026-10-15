@@ -105,6 +105,20 @@ out="$(python3 -I "$here/drive.py" 40 24 \
 echo "$out" | sed -n '/^---- screen: narrow/,/^----$/p' | sed 's/ *$//'
 check_boxes "name shortened with an ellipsis, time kept, border closed" '┌─ [^ ─]+… \([0-9:]+\) ─*┐'
 
+# The other side's name has the accent colour in a group chat as well as a one to one
+# chat, and your own name does not. Magenta is colour 35.
+echo "== sender name colours"
+out="$(python3 -I "$here/drive.py" 110 36 \
+  "wait:2;expect:Alex Rivera;send:\t;expect:Book club;wait:2;sgrbefore:Sam Okafor;sgrbefore:Jo Lindgren" \
+  -- "$nchat" -d "$work/conf")"
+echo "$out" | grep -E '^SGR'
+if echo "$out" | grep -q '^SGR Sam Okafor 35$' && echo "$out" | grep -q '^SGR Jo Lindgren 35$'; then
+  echo "PASS received names in a group use the accent"
+else
+  echo "FAIL received names in a group are not in the accent colour"
+  fail=1
+fi
+
 # A photo in a chat is fetched through the helper and drawn inside its box as image
 # placeholder cells, with the image itself handed to a kitty compatible terminal. The
 # test terminal cannot draw images, so this checks what is sent and what is on screen.
@@ -208,7 +222,7 @@ else
   # SGR mouse events: ESC [ < button ; column ; row, with 0 left press, 64 and 65 the wheel
   click() { printf 'send:\\x1b[<0\\x3b%d\\x3b%dM;send:\\x1b[<0\\x3b%d\\x3b%dm' "$1" "$2" "$1" "$2"; }
   out="$(python3 -I "$here/drive.py" 120 24 \
-    "wait:3;expect:Dummy;expect:Google Messages;expect:@ Dummy;send:\x1b[6\x3b5~;expect:@ Google Messages;send:\x1b[5\x3b5~;expect:@ Dummy;$(click 22 1);expect:@ Google Messages;$(click 10 1);expect:@ Dummy;send:\x1b[6\x3b5~;expect:@ Google Messages;send:\t;expect:Book club @ Google Messages" \
+    "wait:3;expect:Dummy;expect:Google Messages;expect:@ Dummy;send:\x1b[6\x3b5~;expect:@ Google Messages;send:\x1b[5\x3b5~;expect:@ Dummy;$(click 25 1);expect:@ Google Messages;$(click 13 1);expect:@ Dummy;send:\x1b[6\x3b5~;expect:@ Google Messages;send:\t;expect:Book club @ Google Messages" \
     -- "$nchat" -d "$work/conf")"
   echo "$out" | grep -E '^(PASS|FAIL)'
   echo "$out" | grep -q '^FAIL' && fail=1
