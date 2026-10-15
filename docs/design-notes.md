@@ -114,5 +114,5 @@ Each of these was read in the source or observed by running the program.
 
 ## Open questions
 
-1. How to pair the Google account, given the helper does not read the user's main
-   browser. Chromium has been installed for the purpose.
+None at the moment. Not built: thumbnails for videos (they need ffmpeg), and showing
+more than the first photo of a message inline.
