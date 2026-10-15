@@ -105,6 +105,46 @@ out="$(python3 -I "$here/drive.py" 40 24 \
 echo "$out" | sed -n '/^---- screen: narrow/,/^----$/p' | sed 's/ *$//'
 check_boxes "name shortened with an ellipsis, time kept, border closed" '┌─ [^ ─]+… \([0-9:]+\) ─*┐'
 
+# A photo in a chat is fetched through the helper and drawn inside its box as image
+# placeholder cells, with the image itself handed to a kitty compatible terminal. The
+# test terminal cannot draw images, so this checks what is sent and what is on screen.
+echo "== photos in the box"
+out="$(python3 -I "$here/drive.py" 110 36 \
+  "wait:2;expect:Alex Rivera;send:\t;expect:Book club;wait:4;ph:;gfx:;phcolor:" \
+  -- env KITTY_WINDOW_ID=1 "$nchat" -d "$work/conf")"
+echo "$out" | grep -E '^(PLACEHOLDER|GFX|PHCOLOR)'
+rows="$(echo "$out" | sed -n 's/^PLACEHOLDER rows \([0-9]*\).*/\1/p')"
+if [ "${rows:-0}" -ge 3 ]; then
+  echo "PASS photo drawn as $rows rows of placeholder cells"
+else
+  echo "FAIL photo not drawn (placeholder rows: ${rows:-none})"
+  fail=1
+fi
+if echo "$out" | grep -q '^GFX [1-9].*a=T,U=1,f=100,t=f'; then
+  echo "PASS image handed to the terminal with a virtual placement"
+else
+  echo "FAIL no graphics command was sent"
+  fail=1
+fi
+# the colour a placeholder is drawn in is how the terminal knows which image it is
+gfx_id="$(echo "$out" | sed -n 's/^GFX [0-9]* Ga=.*,i=\([0-9]*\),.*/\1/p' | head -1)"
+if [ -n "$gfx_id" ] && echo "$out" | grep -q "^PHCOLOR .*\b$gfx_id\b"; then
+  echo "PASS placeholders are drawn in the colour that names image $gfx_id"
+else
+  echo "FAIL placeholder colour does not match the image id (id: ${gfx_id:-none})"
+  fail=1
+fi
+if grep -q '^media key' "$work/fake/requests.log"; then
+  echo "PASS the photo was fetched through the helper"
+else
+  echo "FAIL the helper was never asked for the photo"
+  fail=1
+fi
+if echo "$out" | grep -q '\[photo\]'; then
+  echo "FAIL the placeholder fallback was drawn"
+  fail=1
+fi
+
 # A message in a chat that is not open raises a notification titled
 # "New Message - <service> - <first name>", or the group's name for a group, and never
 # carries message text. A message in the open chat stays quiet.

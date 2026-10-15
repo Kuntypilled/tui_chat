@@ -20,6 +20,7 @@
 #include "timeutil.h"
 #include "uicolorconfig.h"
 #include "uiconfig.h"
+#include "uiimagecache.h"
 #include "uicontroller.h"
 #include "uikeyconfig.h"
 #include "uikeydump.h"
@@ -128,6 +129,9 @@ void Ui::Run()
   }
 
   LOG_INFO("ui loop end");
+
+  // free the photos held by the terminal and stop the thumbnail thread
+  UiImageCache::Cleanup();
 
   // set as offline before logging off
   for (auto& protocol : protocols)

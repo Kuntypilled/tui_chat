@@ -9,11 +9,14 @@ steps are separated by ';'
   gone:TEXT          wait up to 10 s for TEXT to leave the screen
   snap:LABEL         print the current screen
   count:TEXT         print how many screen rows contain TEXT
+  gfx:               print how many kitty graphics commands were sent
+  ph:                print how many screen rows hold image placeholder cells
+  phcolor:           print the 256 colour numbers placeholder cells were drawn with
   rightof:N:TEXT     pass if TEXT starts at screen column N or further right
   leftof:N:TEXT      pass if TEXT starts at screen column N or further left
 Prints the exit state at the end. Exit status is 1 if any expect failed.
 """
-import fcntl, os, pty, re, select, signal, struct, sys, termios, time
+import fcntl, os, pty, re, select, signal, struct, sys, termios, time, unicodedata
 
 
 class Screen:
@@ -26,6 +29,8 @@ class Screen:
         self.last = " "
         self.pending = b""
         self.esc = b""
+        self.graphics = []  # kitty graphics commands seen
+        self.raw = b""  # the last of the raw output
 
     def _scroll_up(self, n=1):
         for _ in range(n):
@@ -38,6 +43,11 @@ class Screen:
             self.grid.insert(self.top, [" "] * self.cols)
 
     def _put(self, ch):
+        if unicodedata.category(ch) == "Mn":
+            # a combining mark joins the cell before it and takes no column
+            if self.c > 0:
+                self.grid[self.r][self.c - 1] += ch
+            return
         if self.c >= self.cols:
             self.c = 0
             self._newline()
@@ -52,6 +62,7 @@ class Screen:
             self.r = min(self.r + 1, self.rows - 1)
 
     def feed(self, data):
+        self.raw = (self.raw + data)[-400000:]
         data = self.pending + data
         self.pending = b""
         i = 0
@@ -76,6 +87,14 @@ class Screen:
                         self.pending = data[i:]
                         return
                     i += 3
+                    continue
+                if nxt == ord("_"):
+                    end = data.find(b"\x1b\\", i + 2)
+                    if end < 0:
+                        self.pending = data[i:]
+                        return
+                    self.graphics.append(data[i + 2:end].decode("latin-1"))
+                    i = end + 2
                     continue
                 if nxt == ord("]"):
                     end = data.find(b"\x07", i)
@@ -272,6 +291,17 @@ def main():
             pump(0.3)
             n = sum(1 for l in screen.lines() if arg in l)
             print("COUNT %d rows contain: %s" % (n, arg))
+        elif kind == "gfx":
+            pump(0.3)
+            print("GFX %d %s" % (len(screen.graphics), " | ".join(g.split(";")[0] for g in screen.graphics[-3:])))
+        elif kind == "phcolor":
+            pump(0.3)
+            ids = sorted(set(int(m) for m in re.findall(rb"38;5;(\d+)m[^\x1b]{0,3}\xf4\x8e\xbb\xae", screen.raw)))
+            print("PHCOLOR %s" % " ".join(str(i) for i in ids))
+        elif kind == "ph":
+            pump(0.3)
+            n = sum(1 for l in screen.lines() if "\U0010eeee" in l)
+            print("PLACEHOLDER rows %d" % n)
         elif kind == "snap":
             pump(0.3)
             print("---- screen: " + arg)

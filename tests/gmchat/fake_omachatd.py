@@ -9,7 +9,7 @@ and is removed when it does.
 Inject an incoming message by appending a line "chatId|text|senderId" to
 $FAKE_STATE_DIR/inject.
 """
-import json, os, socket, sys, threading, time, uuid
+import json, os, socket, struct, sys, threading, time, uuid, zlib
 
 args = sys.argv[1:]
 if "-version" in args:
@@ -200,6 +200,28 @@ def finalize_send(tmp, chat, text):
         broadcast({"event": "conversation", "network": "gmessages", "data": conv_json(convs[chat])})
 
 
+def make_png(path, w=480, h=300):
+    """A real PNG with a gradient and a bright block, so a thumbnail has something to show."""
+    rows = []
+    for y in range(h):
+        row = bytearray([0])
+        for x in range(w):
+            if 120 <= x < 360 and 75 <= y < 225:
+                row += bytes((250, 200, 40))
+            else:
+                row += bytes((x * 255 // w, y * 255 // h, 120))
+        rows.append(bytes(row))
+
+    def chunk(tag, data):
+        c = struct.pack(">I", len(data)) + tag + data
+        return c + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+    png += chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
+    with open(path, "wb") as f:
+        f.write(png)
+
+
 def handle(req):
     global transient_state
     method = req.get("method", "")
@@ -238,6 +260,14 @@ def handle(req):
         return fail("QR pairing is not offered by this fake")
     if current_state() != "connected":
         return fail("not connected to Google Messages (state: %s)" % current_state())
+    if method == "media":
+        key = params.get("key", "")
+        if not key:
+            return fail("missing attachment key")
+        path = os.path.join(state_dir, "media_%s.png" % key)
+        if not os.path.exists(path):
+            make_png(path)
+        return ok({"key": key, "path": path})
     if method == "conversations":
         count = params.get("count", 0)
         out = sorted((conv_json(c) for c in convs.values()), key=lambda c: -c["timestamp"])

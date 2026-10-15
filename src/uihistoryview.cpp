@@ -16,6 +16,7 @@
 #include "timeutil.h"
 #include "uicolorconfig.h"
 #include "uiconfig.h"
+#include "uiimagecache.h"
 #include "uimodel.h"
 
 UiHistoryView::UiHistoryView(const UiViewParams& p_Params)
@@ -97,6 +98,9 @@ void UiHistoryView::Draw()
   m_Dirty = false;
 
   curs_set(0);
+
+  UiImageCache::BeginFrame();
+  bool anyImagePending = false;
 
   static int colorPairTextSent = UiColorConfig::GetColorPair("history_text_sent_color");
   static int colorPairTextRecv = UiColorConfig::GetColorPair("history_text_recv_color");
@@ -225,6 +229,9 @@ void UiHistoryView::Draw()
     }
 
     // File attachment
+    int imageCols = 0;
+    int imageRows = 0;
+    int photoId = 0;
     if (!msg.fileInfo.empty())
     {
       FileInfo fileInfo = ProtocolUtil::FileInfoFromHex(msg.fileInfo);
@@ -234,7 +241,14 @@ void UiHistoryView::Draw()
         (AppConfig::GetNum("attachment_prefetch") == AttachmentPrefetchAll);
       static const bool isAttachmentPrefetchSelected =
         (AppConfig::GetNum("attachment_prefetch") == AttachmentPrefetchSelected);
-      if (isAttachmentPrefetchAll || (isSelectedMessage && isAttachmentPrefetchSelected))
+      static const bool isAttachmentPrefetchNone =
+        (AppConfig::GetNum("attachment_prefetch") == AttachmentPrefetchNone);
+
+      // A photo is fetched as soon as it is on screen when it is to be shown inline,
+      // unless fetching is switched off altogether
+      const bool isInlinePhoto = UiImageCache::Enabled() && !isAttachmentPrefetchNone &&
+        UiImageCache::IsImageFile(fileInfo.filePath, fileInfo.fileType);
+      if (isAttachmentPrefetchAll || isInlinePhoto || (isSelectedMessage && isAttachmentPrefetchSelected))
       {
         if (!UiModel::IsAttachmentDownloaded(fileInfo) && UiModel::IsAttachmentDownloadable(fileInfo))
         {
@@ -273,8 +287,42 @@ void UiHistoryView::Draw()
         fileStatus = statusDownloadFailed;
       }
 
-      std::wstring fileStr = attachmentIndicator + StrUtil::ToWString(fileName + fileStatus);
-      wlines.insert(wlines.begin(), fileStr);
+      // A photo that is on disk is shown in the box. Until its thumbnail is made, or when it
+      // cannot be shown, the file name line stays.
+      int imageId = 0;
+      if (UiImageCache::Enabled() && (fileInfo.fileStatus == FileStatusDownloaded) &&
+          UiImageCache::IsImageFile(fileInfo.filePath, fileInfo.fileType))
+      {
+        const UiImage image = UiImageCache::Get(fileInfo.filePath);
+        if (image.state == UiImage::Pending)
+        {
+          anyImagePending = true;
+        }
+        else if (image.state == UiImage::Ready)
+        {
+          const int maxCols = std::min(contentWidth, 40);
+          const int maxRows = std::min(14, std::max(3, m_PaddedH - 6));
+          UiImageCache::Layout(image, maxCols, maxRows, imageCols, imageRows);
+          imageId = UiImageCache::Show(fileInfo.filePath, imageCols, imageRows);
+          if (imageId == 0)
+          {
+            imageCols = 0;
+            imageRows = 0;
+          }
+        }
+      }
+
+      if (imageId != 0)
+      {
+        // blank text for the cells the photo covers, so the box is sized around them
+        wlines.insert(wlines.begin(), imageRows, std::wstring(imageCols, L' '));
+      }
+      else
+      {
+        std::wstring fileStr = attachmentIndicator + StrUtil::ToWString(fileName + fileStatus);
+        wlines.insert(wlines.begin(), fileStr);
+      }
+      photoId = imageId;
     }
 
     // Reactions
@@ -456,6 +504,7 @@ void UiHistoryView::Draw()
     // along the border. A selected message has its whole box reversed.
     const int borderStyle = (isSelectedMessage ? attributeNameSelected : (int)A_NORMAL) | colorPairName;
     const int labelStyle = attributeName | colorPairName;
+    const int lineStyleNormal = attributeTextNormal | colorPairTextRecv;
 
     auto put = [&](int p_Y, int p_X, const std::wstring& p_Str, int p_Style)
     {
@@ -472,6 +521,23 @@ void UiHistoryView::Draw()
     // Text, drawn from the last line upwards
     for (auto wline = wlines.rbegin(); wline != wlines.rend(); ++wline)
     {
+      // the first imageRows lines of the message are the photo, one cell row each
+      const int lineIndex = (int)wlines.size() - 1 - (int)std::distance(wlines.rbegin(), wline);
+      if ((photoId != 0) && (lineIndex < imageRows))
+      {
+        put(y, boxX, L"│", borderStyle);
+        put(y, boxX + 1, L" ", lineStyleNormal);
+        put(y, boxX + boxWidth - 2, L" ", lineStyleNormal);
+        put(y, boxX + boxWidth - 1, L"│", borderStyle);
+        if (!UiImageCache::DrawRow(m_PaddedWin, y, boxX + 2, photoId, lineIndex, imageCols))
+        {
+          put(y, boxX + 2, L"[photo]", lineStyleNormal);
+        }
+
+        if (--y < 0) break;
+        continue;
+      }
+
       bool isAttachment = (wline->rfind(attachmentIndicator, 0) == 0);
       bool isQuote = (wline->rfind(quoteIndicator, 0) == 0);
       bool isReaction = (reactionLines == 1) && (std::distance(wline, wlines.rbegin()) == 0);
@@ -522,6 +588,12 @@ void UiHistoryView::Draw()
   }
 
   wrefresh(m_PaddedWin);
+
+  // keep drawing while thumbnails are being made, so photos appear as soon as they are
+  if (anyImagePending)
+  {
+    m_Dirty = true;
+  }
 }
 
 int UiHistoryView::GetHistoryShowCount()

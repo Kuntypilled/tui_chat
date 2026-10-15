@@ -19,6 +19,9 @@ public:
   static void Cleanup();
   static int GetColorPair(const std::string& p_Param); // ex: "top_color"
   static int GetUserColorPair(const std::string& p_Param, const std::string& p_UserId);
+  // A pair with the given foreground colour number and the default background. Returns the
+  // pair number as it is, not wrapped in COLOR_PAIR(), or 0 when none can be made.
+  static int GetForegroundPair(int p_Fg);
   static bool IsUserColor(const std::string& p_Param); // ex: "top_color"
   static int GetAttribute(const std::string& p_Param); // ex: "top_attr"
 

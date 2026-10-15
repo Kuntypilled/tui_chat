@@ -432,6 +432,8 @@ add_executable(nchat
   src/uihelpview.h
   src/uihistoryview.cpp
   src/uihistoryview.h
+  src/uiimagecache.cpp
+  src/uiimagecache.h
   src/uikeyconfig.cpp
   src/uikeyconfig.h
   src/uikeydump.cpp

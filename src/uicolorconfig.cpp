@@ -137,6 +137,23 @@ int UiColorConfig::GetColorPair(const std::string& p_Param)
   return colorPairs[p_Param];
 }
 
+int UiColorConfig::GetForegroundPair(int p_Fg)
+{
+  if (!has_colors()) return 0;
+
+  static std::map<int, int> pairs;
+  auto it = pairs.find(p_Fg);
+  if (it != pairs.end()) return it->second;
+
+  // COLOR_PAIR() only holds eight bits, so stay clear of the end of that range
+  if (colorPairId >= 250) return 0;
+
+  ++colorPairId;
+  init_pair(colorPairId, p_Fg, -1);
+  pairs[p_Fg] = colorPairId;
+  return colorPairId;
+}
+
 int UiColorConfig::GetUserColorPair(const std::string& p_Param, const std::string& p_UserId)
 {
   if (!has_colors()) return 0;

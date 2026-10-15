@@ -92,6 +92,21 @@ private:
                       std::vector<ContactInfo>& p_Contacts, std::string& p_TmpId);
   void Emit(std::shared_ptr<ServiceMessage> p_ServiceMessage);
 
+  // photos, fetched through the helper on a thread of their own so a slow download does
+  // not hold up sending
+  struct MediaJob
+  {
+    std::string chatId;
+    std::string msgId;
+    std::string fileId;
+    DownloadFileAction action = DownloadFileActionNone;
+  };
+
+  void DoDownloadFile(const std::string& p_ChatId, const std::string& p_MsgId, const std::string& p_FileId,
+                      DownloadFileAction p_Action);
+  void ProcessMedia();
+  void FetchMedia(const MediaJob& p_Job);
+
   // setup wizard
   bool WaitForState(const std::function<bool()>& p_Predicate, int p_TimeoutMs);
   bool PairWithBrowser();
@@ -128,6 +143,13 @@ private:
   std::map<std::string, std::string> m_SentTmpIds; // provisional id -> chat id
   std::map<std::string, Cursor> m_Cursors; // chat id -> where the last page ended
   std::map<std::string, int64_t> m_MessageTimeUs; // message id -> helper timestamp
+  std::map<std::string, std::string> m_MediaTypes; // attachment key -> mime type
+
+  std::thread m_MediaThread;
+  std::deque<MediaJob> m_MediaQueue;
+  std::mutex m_MediaMutex;
+  std::condition_variable m_MediaCondVar;
+  bool m_MediaStop = false;
 };
 
 extern "C" GmChat* CreateGmChat();

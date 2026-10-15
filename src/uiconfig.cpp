@@ -52,6 +52,7 @@ void UiConfig::Init()
     { "list_enabled", "1" },
     { "list_width", "20" },
     { "history_sent_align_right", "1" }, // sent messages on the right, received on the left
+    { "inline_images", "1" }, // show photos in the message box, in a kitty compatible terminal
     { "history_max_width_percent", "75" }, // widest a message is drawn, of the history width
     { "listdialog_show_filter", "1" },
     { "mark_read_any_chat", "0" },

@@ -18,6 +18,7 @@
 
 #include "fileutil.h"
 #include "gmhelper.h"
+#include "protocolutil.h"
 #include "log.h"
 #include "status.h"
 #include "strutil.h"
@@ -83,13 +84,17 @@ static std::string StripPlus(const std::string& p_Number)
   return (!p_Number.empty() && (p_Number[0] == '+')) ? p_Number.substr(1) : p_Number;
 }
 
-static std::string AttachmentLabels(const rapidjson::Value& p_Attachments)
+static std::string AttachmentLabels(const rapidjson::Value& p_Attachments, int p_SkipIndex)
 {
   std::string labels;
   if (!p_Attachments.IsArray()) return labels;
 
+  int index = -1;
   for (const auto& attachment : p_Attachments.GetArray())
   {
+    ++index;
+    if (index == p_SkipIndex) continue;
+
     std::string label;
     if (GetBool(attachment, "isImage")) label = "[Photo]";
     else if (GetBool(attachment, "isGif")) label = "[GIF]";
@@ -540,6 +545,17 @@ bool GmChat::Logout()
     m_Thread.join();
   }
 
+  {
+    std::lock_guard<std::mutex> lock(m_MediaMutex);
+    m_MediaStop = true;
+  }
+
+  m_MediaCondVar.notify_all();
+  if (m_MediaThread.joinable())
+  {
+    m_MediaThread.join();
+  }
+
   return true;
 }
 
@@ -641,6 +657,14 @@ void GmChat::PerformRequest(std::shared_ptr<RequestMessage> p_RequestMessage)
         std::shared_ptr<MarkMessageReadRequest> request =
           std::static_pointer_cast<MarkMessageReadRequest>(p_RequestMessage);
         DoMarkRead(request->chatId, request->msgId);
+      }
+      break;
+
+    case DownloadFileRequestType:
+      {
+        std::shared_ptr<DownloadFileRequest> request =
+          std::static_pointer_cast<DownloadFileRequest>(p_RequestMessage);
+        DoDownloadFile(request->chatId, request->msgId, request->fileId, request->downloadFileAction);
       }
       break;
 
@@ -827,6 +851,94 @@ void GmChat::DoSendMessage(const std::string& p_ChatId, const ChatMessage& p_Cha
   newMessagesNotify->cached = false;
   newMessagesNotify->sequence = false;
   Emit(newMessagesNotify);
+}
+
+void GmChat::DoDownloadFile(const std::string& p_ChatId, const std::string& p_MsgId, const std::string& p_FileId,
+                            DownloadFileAction p_Action)
+{
+  MediaJob job;
+  job.chatId = p_ChatId;
+  job.msgId = p_MsgId;
+  job.fileId = p_FileId;
+  job.action = p_Action;
+
+  {
+    std::lock_guard<std::mutex> lock(m_MediaMutex);
+    if (!m_MediaThread.joinable())
+    {
+      m_MediaStop = false;
+      m_MediaThread = std::thread(&GmChat::ProcessMedia, this);
+    }
+
+    m_MediaQueue.push_back(job);
+  }
+
+  m_MediaCondVar.notify_one();
+}
+
+void GmChat::ProcessMedia()
+{
+  while (true)
+  {
+    MediaJob job;
+    {
+      std::unique_lock<std::mutex> lock(m_MediaMutex);
+      m_MediaCondVar.wait(lock, [this]() { return m_MediaStop || !m_MediaQueue.empty(); });
+      if (m_MediaStop) return;
+
+      job = m_MediaQueue.front();
+      m_MediaQueue.pop_front();
+    }
+
+    FetchMedia(job);
+  }
+}
+
+void GmChat::FetchMedia(const MediaJob& p_Job)
+{
+  FileInfo fileInfo;
+  fileInfo.fileId = p_Job.fileId;
+  {
+    std::lock_guard<std::mutex> lock(m_StateMutex);
+    auto it = m_MediaTypes.find(p_Job.fileId);
+    if (it != m_MediaTypes.end()) fileInfo.fileType = it->second;
+  }
+
+  fileInfo.fileStatus = FileStatusDownloadFailed;
+
+  // The phone may have to upload the full size first, which the helper reports as
+  // pending. Ask a few times, then give up and show it as failed.
+  const std::string params = "{\"key\":" + Quote(p_Job.fileId) + "}";
+  for (int attempt = 0; attempt < 8; ++attempt)
+  {
+    GmReply reply = m_Client ? m_Client->Call("media", params, 60000) : GmReply();
+    const rapidjson::Value* result = reply.Result();
+    if (!reply.ok || (result == nullptr) || !result->IsObject())
+    {
+      LOG_DEBUG("media failed: %s", reply.error.c_str());
+      break;
+    }
+
+    const std::string path = GetStr(*result, "path");
+    if (!path.empty())
+    {
+      fileInfo.filePath = path;
+      fileInfo.fileStatus = FileStatusDownloaded;
+      break;
+    }
+
+    if (!GetBool(*result, "pending")) break;
+
+    std::unique_lock<std::mutex> lock(m_MediaMutex);
+    if (m_MediaCondVar.wait_for(lock, std::chrono::seconds(3), [this]() { return m_MediaStop; })) return;
+  }
+
+  std::shared_ptr<NewMessageFileNotify> notify = std::make_shared<NewMessageFileNotify>(m_ProfileId);
+  notify->chatId = p_Job.chatId;
+  notify->msgId = p_Job.msgId;
+  notify->fileInfo = ProtocolUtil::FileInfoToHex(fileInfo);
+  notify->downloadFileAction = p_Job.action;
+  Emit(notify);
 }
 
 void GmChat::DoMarkRead(const std::string& p_ChatId, const std::string& p_MsgId)
@@ -1060,9 +1172,49 @@ bool GmChat::ConvertMessage(const rapidjson::Value& p_Msg, ChatMessage& p_ChatMe
 
   std::string text = GetStr(p_Msg, "text");
   const rapidjson::Value* attachments = GetMember(p_Msg, "attachments");
+  int photoIndex = -1;
+  if ((attachments != nullptr) && attachments->IsArray())
+  {
+    // The first photo is attached to the message as a file, which is what lets it be
+    // shown in the box. Anything else in the message stays a label in the text.
+    int index = -1;
+    for (const auto& attachment : attachments->GetArray())
+    {
+      ++index;
+      const std::string key = GetStr(attachment, "key");
+      if (key.empty() || !(GetBool(attachment, "isImage") || GetBool(attachment, "isGif"))) continue;
+
+      std::string mime = GetStr(attachment, "mimeType");
+      if (mime.empty()) mime = GetBool(attachment, "isGif") ? "image/gif" : "image/jpeg";
+
+      std::string ext = "jpg";
+      if (mime == "image/png") ext = "png";
+      else if (mime == "image/gif") ext = "gif";
+      else if (mime == "image/webp") ext = "webp";
+
+      const std::string cachedPath = GetStr(attachment, "path");
+      const std::string name = GetStr(attachment, "name");
+
+      FileInfo fileInfo;
+      fileInfo.fileId = key;
+      fileInfo.fileType = mime;
+      fileInfo.filePath = !cachedPath.empty() ? cachedPath : (name.empty() ? ("photo." + ext) : name);
+      fileInfo.fileStatus = !cachedPath.empty() ? FileStatusDownloaded : FileStatusNotDownloaded;
+      p_ChatMessage.fileInfo = ProtocolUtil::FileInfoToHex(fileInfo);
+      photoIndex = index;
+
+      {
+        std::lock_guard<std::mutex> lock(m_StateMutex);
+        m_MediaTypes[key] = mime;
+      }
+
+      break;
+    }
+  }
+
   if (attachments != nullptr)
   {
-    const std::string labels = AttachmentLabels(*attachments);
+    const std::string labels = AttachmentLabels(*attachments, photoIndex);
     if (!labels.empty())
     {
       text += (text.empty() ? "" : "\n") + labels;

@@ -69,6 +69,23 @@ terminal is not focused). Nothing is raised at login or while tui_chat is closed
   `desktop_notify_connectivity` (off), `desktop_notify_active_current`,
   `desktop_notify_active_noncurrent` and `desktop_notify_inactive`.
 
+## Photos
+
+In kitty, or another terminal that speaks the kitty graphics protocol, photos are
+drawn inside their message box, up to 40 columns and 14 rows. They are fetched when
+they come on screen, unless `attachment_prefetch` is `0`.
+
+- A background thread makes a thumbnail with ImageMagick (`magick` must be on the
+  path), at most 640 pixels, forcing the decoder from the file's extension so a file's
+  content cannot pick a different format. The thumbnails are kept in
+  `~/.config/nchat/thumbs/` and removed after a month.
+- The photo is handed to the terminal by file path and drawn as ordinary text cells
+  (kitty's Unicode placeholders), so it scrolls and clips with the history. Until a
+  thumbnail is ready, and in a terminal without graphics, the file name line stays.
+- Google Messages photos are fetched through the helper's `media` call. Only the
+  first photo of a message is shown inline, others stay as `[Photo]` in the text.
+- Settings: `inline_images` in `ui.conf` (on). Not used inside tmux.
+
 ## What is stored, and where
 
 - The helper keeps your message content and its own login under
