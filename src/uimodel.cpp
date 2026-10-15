@@ -2858,6 +2858,20 @@ void UiModel::Impl::UpdateChatInfoLastMessageTime(const std::string& p_ProfileId
   }
 }
 
+// A saved contact's first name. A number (an unsaved sender) is kept whole, as cutting
+// "+1 555 0142" at its first space would leave "+1".
+static std::string FirstNameForNotify(const std::string& p_Name)
+{
+  const size_t start = p_Name.find_first_not_of(" \t");
+  if (start == std::string::npos) return p_Name;
+
+  const char first = p_Name[start];
+  if ((first == '+') || ((first >= '0') && (first <= '9'))) return p_Name.substr(start);
+
+  const size_t end = p_Name.find_first_of(" \t", start);
+  return p_Name.substr(start, (end == std::string::npos) ? std::string::npos : (end - start));
+}
+
 void UiModel::Impl::UpdateChatInfoIsUnread(const std::string& p_ProfileId, const std::string& p_ChatId)
 {
   const std::unordered_map<std::string, ChatMessage>& messages = m_Messages[p_ProfileId][p_ChatId];
@@ -2887,8 +2901,15 @@ void UiModel::Impl::UpdateChatInfoIsUnread(const std::string& p_ProfileId, const
       {
         const bool receivedAfterConnect = (m_ConnectTime.count(p_ProfileId) > 0) &&
           (chatMessage.timeSent > m_ConnectTime[p_ProfileId]);
-        if (receivedAfterConnect)
+        // This runs again for the same message, for instance when the chat's own update
+        // follows the message, so each message is announced once.
+        static std::map<std::string, std::string> s_LastNotifiedMsgId;
+        const std::string notifyKey = p_ProfileId + "\n" + p_ChatId;
+        const bool alreadyNotified = (s_LastNotifiedMsgId[notifyKey] == lastMessageId);
+        if (receivedAfterConnect && !alreadyNotified)
         {
+          s_LastNotifiedMsgId[notifyKey] = lastMessageId;
+
           static const bool terminalBellActive = UiConfig::GetBool("terminal_bell_active");
           static const bool terminalBellInactive = UiConfig::GetBool("terminal_bell_inactive");
           bool terminalBell = m_TerminalActive ? terminalBellActive : terminalBellInactive;
@@ -2920,11 +2941,14 @@ void UiModel::Impl::UpdateChatInfoIsUnread(const std::string& p_ProfileId, const
 
           if (desktopNotify)
           {
-            const std::string name = ((chatMessage.senderId == p_ChatId)
-              ? GetContactName(p_ProfileId, chatMessage.senderId)
-              : GetContactName(p_ProfileId, p_ChatId) + " - " + GetContactName(p_ProfileId, chatMessage.senderId))
-              + GetProfileSuffix(p_ProfileId);
-            DesktopNotify(name, chatMessage.text);
+            // The title says where it came from and who from, and nothing of the
+            // message. A group shows the group's name, a person their first name or,
+            // when they are not saved, their number.
+            const bool isGroup = (chatMessage.senderId != p_ChatId);
+            const std::string who = isGroup
+              ? GetContactName(p_ProfileId, p_ChatId)
+              : FirstNameForNotify(GetContactName(p_ProfileId, chatMessage.senderId));
+            DesktopNotify("New Message - " + GetProfileDisplayName(p_ProfileId) + " - " + who, "");
           }
         }
       }
@@ -3612,7 +3636,7 @@ void UiModel::Impl::DesktopNotify(const std::string& p_Name, const std::string& 
           }
           else if (output.find("/notify-send") != std::string::npos)
           {
-            desktopNotifyCommand = "notify-send 'nchat' '%1: %2'";
+            desktopNotifyCommand = "notify-send -a tui_chat '%1' '%2'";
           }
         }
       }

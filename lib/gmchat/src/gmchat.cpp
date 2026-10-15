@@ -929,6 +929,13 @@ void GmChat::OnEvent(const std::string& p_Event, const rapidjson::Value& p_Data)
     std::vector<ContactInfo> contacts;
     if (!ConvertMessage(p_Data, chatMessage, chatId, contacts, tmpId)) return;
 
+    // A message that arrives now is unread until it is viewed. The chat's unread flag
+    // cannot be relied on here, as the helper may send it after the message.
+    if (!chatMessage.isOutgoing)
+    {
+      chatMessage.isRead = false;
+    }
+
     // The final copy of a message sent from here has a new id. Replace the
     // provisional one the UI has been showing.
     std::string replacedId;
@@ -1085,8 +1092,16 @@ bool GmChat::ConvertMessage(const rapidjson::Value& p_Msg, ChatMessage& p_ChatMe
 
   if (!p_ChatMessage.isOutgoing)
   {
-    p_ChatMessage.senderId = senderId.empty() ? p_ChatId : (s_ParticipantPrefix + senderId);
-    if (!senderId.empty() && !senderName.empty())
+    // In a one to one chat the sender is the chat itself, which is what nchat's own
+    // protocols report and what lets it tell a person's chat from a group.
+    bool isOneToOne = false;
+    {
+      std::lock_guard<std::mutex> lock(m_StateMutex);
+      isOneToOne = (m_ChatUnread.count(p_ChatId) > 0) && (m_GroupChats.count(p_ChatId) == 0);
+    }
+
+    p_ChatMessage.senderId = (senderId.empty() || isOneToOne) ? p_ChatId : (s_ParticipantPrefix + senderId);
+    if (!senderId.empty() && !senderName.empty() && !isOneToOne)
     {
       ContactInfo contact;
       contact.id = s_ParticipantPrefix + senderId;

@@ -105,6 +105,43 @@ out="$(python3 -I "$here/drive.py" 40 24 \
 echo "$out" | sed -n '/^---- screen: narrow/,/^----$/p' | sed 's/ *$//'
 check_boxes "name shortened with an ellipsis, time kept, border closed" '┌─ [^ ─]+… \([0-9:]+\) ─*┐'
 
+# A message in a chat that is not open raises a notification titled
+# "New Message - <service> - <first name>", or the group's name for a group, and never
+# carries message text. A message in the open chat stays quiet.
+echo "== notifications"
+notify_log="$work/notify.log"
+rm -f "$notify_log"
+sed -i "s|^desktop_notify_command=.*|desktop_notify_command=printf '%s\\\\n' '%1 / %2' >> $notify_log|" "$work/conf/ui.conf"
+sed -i 's|^desktop_notify_enabled=.*|desktop_notify_enabled=1|' "$work/conf/ui.conf"
+out="$(python3 -I "$here/drive.py" 110 24 \
+  "wait:2;expect:Alex Rivera;run:printf 'c_alex|secret text one|u_alex\n' >> $work/fake/inject;wait:1.5;run:printf 'c_club|secret text two|u_sam\n' >> $work/fake/inject;wait:1.5;run:printf 'c_num|secret text three|u_x\n' >> $work/fake/inject;expect:secret text three;wait:1.5" \
+  -- "$nchat" -d "$work/conf")"
+echo "$out" | grep -E '^(PASS|FAIL)'
+echo "$out" | grep -q '^FAIL' && fail=1
+check_notify() {
+  local what="$1" pattern="$2"
+  if grep -Fxq -- "$pattern" "$notify_log" 2>/dev/null; then
+    echo "PASS $what"
+  else
+    echo "FAIL $what (log: $(tr '\n' '|' < "$notify_log" 2>/dev/null))"
+    fail=1
+  fi
+}
+check_notify "person: service and first name" "New Message - Google Messages - Alex / "
+check_notify "group: the group's name" "New Message - Google Messages - Book club / "
+if grep -q "secret" "$notify_log" 2>/dev/null; then
+  echo "FAIL message text reached a notification"
+  fail=1
+else
+  echo "PASS no message text in any notification"
+fi
+if [ "$(wc -l < "$notify_log" 2>/dev/null)" = "2" ]; then
+  echo "PASS the open chat stayed quiet"
+else
+  echo "FAIL expected exactly 2 notifications"
+  fail=1
+fi
+
 echo "== helper restart is survived"
 out="$(python3 -I "$here/drive.py" 110 20 \
   "wait:2;expect:Online;run:kill \$(cat $work/fake/pid);wait:1;expect:Online;run:printf 'c_num|after the restart|u_x\n' >> $work/fake/inject;expect:after the restart" \

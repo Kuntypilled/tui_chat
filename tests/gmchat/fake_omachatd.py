@@ -323,6 +323,8 @@ def inject_watcher():
                 else:
                     convs[chat]["unread"] = True
                 m = add_message(chat, text, False, who, 0)
+                # a message that arrives now carries the time it arrives, not the helper's start
+                m["timestamp"] = int(time.time() * 1_000_000)
                 broadcast({"event": "message", "network": "gmessages", "data": m, "notify": True})
                 broadcast({"event": "conversation", "network": "gmessages", "data": conv_json(convs[chat])})
 

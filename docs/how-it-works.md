@@ -54,6 +54,21 @@ not at `build/bin/nchat`.
 - If the helper is already running, tui_chat just connects to it.
 - If the helper stops while tui_chat is open, tui_chat starts it again.
 
+## Notifications
+
+tui_chat raises a desktop notification with `notify-send` for a message that arrives
+while it is open, in a chat that is not the one on screen (or any chat, when the
+terminal is not focused). Nothing is raised at login or while tui_chat is closed.
+
+- The title is `New Message - <service> - <first name>`, the number for a sender who
+  is not saved, or the group's name for a group. It never contains message text.
+- Messages you send from another device never notify, and muted chats stay quiet.
+- Each message notifies once.
+- Settings are in `ui.conf`: `desktop_notify_enabled` (on), `desktop_notify_command`
+  (empty means `notify-send -a tui_chat '%1' '%2'`, with the title as `%1`),
+  `desktop_notify_connectivity` (off), `desktop_notify_active_current`,
+  `desktop_notify_active_noncurrent` and `desktop_notify_inactive`.
+
 ## What is stored, and where
 
 - The helper keeps your message content and its own login under
