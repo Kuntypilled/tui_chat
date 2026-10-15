@@ -158,6 +158,21 @@ The Telegram and WhatsApp switches only exist to make builds shorter. Turn them 
 for those services. Telegram's build is the heaviest and can run out of memory on a
 small machine.
 
+For the service selector with Google Messages and WhatsApp, build with
+`-DHAS_WHATSAPP=ON` (the WhatsApp library is about 45 MB and compiles Go on first
+build, which downloads modules).
+
+## Adding WhatsApp
+
+WhatsApp runs inside nchat itself, with no helper, so it only receives messages and
+notifies while tui_chat is open.
+
+1. Run `nchat -s` in a real terminal (not through a tool that has no stdin).
+2. Choose WhatsApp. It asks for your own phone number only to name the profile.
+3. A QR code is drawn in the terminal. On the phone: WhatsApp, Settings, Linked
+   devices, Link a device, then scan it.
+4. After that, `nchat` shows WhatsApp as a second tab beside Google Messages.
+
 ## Testing without an account
 
 `tests/gmchat/smoke.sh <path-to-nchat>` runs the adapter against a fake helper with
