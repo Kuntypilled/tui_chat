@@ -193,6 +193,13 @@ std::string FileUtil::GetDownloadsDir()
     }
   }
 
+  // Honour the user's XDG downloads dir, which may be renamed or localised
+  std::string xdgDownloadsDir = FileUtil::GetXdgUserDir("XDG_DOWNLOAD_DIR");
+  if (FileUtil::IsDir(xdgDownloadsDir))
+  {
+    return xdgDownloadsDir;
+  }
+
   std::string homeDir = std::string(getenv("HOME"));
   std::string downloadsDir = homeDir + "/Downloads";
   if (FileUtil::IsDir(downloadsDir))
@@ -201,6 +208,35 @@ std::string FileUtil::GetDownloadsDir()
   }
 
   return homeDir;
+}
+
+std::string FileUtil::GetXdgUserDir(const std::string& p_Key)
+{
+  // Parses lines like: XDG_DOWNLOAD_DIR="$HOME/downloads"
+  char* homeEnv = getenv("HOME");
+  const std::string homeDir = std::string((homeEnv != nullptr) ? homeEnv : "");
+  char* xdgConfigHomeEnv = getenv("XDG_CONFIG_HOME");
+  const std::string configHomeDir =
+    ((xdgConfigHomeEnv != nullptr) && (xdgConfigHomeEnv[0] != '\0')) ? xdgConfigHomeEnv : (homeDir + "/.config");
+
+  std::ifstream file(configHomeDir + "/user-dirs.dirs");
+  std::string line;
+  const std::string prefix = p_Key + "=";
+  while (std::getline(file, line))
+  {
+    StrUtil::Trim(line);
+    if (!StrUtil::StartsWith(line, prefix)) continue;
+
+    std::string value = line.substr(prefix.size());
+    if ((value.size() >= 2) && (value.front() == '"') && (value.back() == '"'))
+    {
+      value = value.substr(1, value.size() - 2);
+    }
+
+    return FileUtil::ExpandPath(value);
+  }
+
+  return "";
 }
 
 std::string FileUtil::GetFileExt(const std::string& p_Path)

@@ -75,6 +75,7 @@ public:
   static std::string GetDefaultApplicationDir();
   static int GetDirVersion(const std::string& p_Dir);
   static std::string GetDownloadsDir();
+  static std::string GetXdgUserDir(const std::string& p_Key);
   static std::string GetFileExt(const std::string& p_Path);
   static std::string GetMimeType(const std::string& p_Path);
   static std::string GetSelfPath();
